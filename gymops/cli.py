@@ -15,6 +15,7 @@ Commands:
     history        — View workout history for an exercise
     prs            — Show all personal records
     digest         — Generate weekly Markdown report
+    set-language   — Choose display language: en (English) or es (Español)
 """
 
 import typer
@@ -22,6 +23,7 @@ from rich.console import Console
 
 from gymops import __version__
 from gymops.db import init_db
+from gymops.i18n import t, set_language as _save_language, get_language, SUPPORTED_LANGUAGES
 
 app = typer.Typer(
     name="gymops",
@@ -76,16 +78,16 @@ def log(
 
         # Build the output panel
         content = (
-            f"[dim]Exercise:[/]      [bold]{workout.exercise_name}[/]\n"
-            f"[dim]Sets x Reps:[/]  [bold]{workout.sets} x {workout.reps}[/]\n"
-            f"[dim]Weight:[/]       [bold]{workout.weight:.1f} kg[/]\n"
-            f"[dim]Est. 1RM:[/]     [bold cyan]{workout.epley_1rm:.1f} kg[/] [gold1]★[/]\n"
-            f"[dim]Timestamp:[/]    {workout.timestamp}\n"
-            f"[dim]Status:[/]       Saved to database [bold spring_green1]✓[/]"
+            f"[dim]{t('log_exercise')}[/]      [bold]{workout.exercise_name}[/]\n"
+            f"[dim]{t('log_sets_reps')}[/]  [bold]{workout.sets} x {workout.reps}[/]\n"
+            f"[dim]{t('log_weight')}[/]       [bold]{workout.weight:.1f} kg[/]\n"
+            f"[dim]{t('log_1rm')}[/]     [bold cyan]{workout.epley_1rm:.1f} kg[/] [gold1]★[/]\n"
+            f"[dim]{t('log_timestamp')}[/]    {workout.timestamp}\n"
+            f"[dim]{t('status')}[/]       {t('saved_ok')}"
         )
 
         console.print(
-            Panel(content, title="[bold]🏋️  Workout Logged Successfully![/]", border_style="cyan")
+            Panel(content, title=f"[bold]{t('log_success_title')}[/]", border_style="cyan")
         )
 
         # Show program day guidelines if applicable
@@ -97,17 +99,17 @@ def log(
                     ex = db.get_exercise_by_name(workout.exercise_name)
                     rep_range = "6-10 reps" if ex and ex.type == "compound" else "8-12 reps"
                     console.print(
-                        f"\n[dim]Routine Guidelines for {workout.exercise_name}:[/dim]"
+                        f"\n[dim]{t('log_guidelines')} {workout.exercise_name}:[/dim]"
                     )
                     console.print(
-                        f"  Target Reps for [cyan]{active_day.name}[/]: "
+                        f"  {t('log_target_reps')} [cyan]{active_day.name}[/]: "
                         f"[cyan]{dex.target_reps} reps[/] "
-                        f"(Suggested {ex.type.capitalize()} range: [dim]{rep_range}[/])"
+                        f"({t('log_suggested')} {ex.type.capitalize()} {t('log_range')} [dim]{rep_range}[/])"
                     )
                     break
 
     except ValueError as e:
-        console.print(f"[bright_red]Error:[/] {e}")
+        console.print(f"[bright_red]{t('error_prefix')}[/] {e}")
         raise typer.Exit(code=1)
 
 
@@ -128,24 +130,24 @@ def add_exercise(
     from rich.panel import Panel
 
     if exercise_type not in ("compound", "isolation"):
-        console.print("[bright_red]Error:[/] Type must be 'compound' or 'isolation'.")
+        console.print(f"[bright_red]{t('error_prefix')}[/] {t('addex_type_err')}")
         raise typer.Exit(code=1)
 
     try:
         exercise = db.add_exercise(name, muscle_group, exercise_type)
         rep_range = "6-10 reps" if exercise.type == "compound" else "8-12 reps"
         content = (
-            f"[dim]Name:[/]          [bold]{exercise.name}[/]\n"
-            f"[dim]Muscle Group:[/]  {exercise.muscle_group}\n"
-            f"[dim]Type:[/]          {exercise.type.capitalize()} "
-            f"([dim]Suggested: {rep_range}[/])\n"
-            f"[dim]Status:[/]        Registered successfully [bold spring_green1]✓[/]"
+            f"[dim]{t('addex_name')}[/]          [bold]{exercise.name}[/]\n"
+            f"[dim]{t('addex_muscle')}[/]  {exercise.muscle_group}\n"
+            f"[dim]{t('addex_type')}[/]          {exercise.type.capitalize()} "
+            f"([dim]{t('log_suggested')}: {rep_range}[/])\n"
+            f"[dim]{t('status')}[/]        {t('saved_ok')}"
         )
         console.print(
-            Panel(content, title="[bold]📝 New Exercise Registered[/]", border_style="cyan")
+            Panel(content, title=f"[bold]{t('addex_title')}[/]", border_style="cyan")
         )
     except ValueError as e:
-        console.print(f"[bright_red]Error:[/] {e}")
+        console.print(f"[bright_red]{t('error_prefix')}[/] {e}")
         raise typer.Exit(code=1)
 
 
@@ -241,31 +243,31 @@ def list_programs() -> None:
     active = db.get_active_state()
 
     table = Table(box=box.ROUNDED, border_style="cyan", show_lines=True)
-    table.add_column("Status", style="bold", width=12)
-    table.add_column("Program", style="white")
-    table.add_column("Created By", style="dim")
-    table.add_column("Days", justify="right")
+    table.add_column(t("prog_status"), style="bold", width=12)
+    table.add_column(t("prog_name"), style="white")
+    table.add_column(t("prog_author"), style="dim")
+    table.add_column(t("prog_days"), justify="right")
 
     active_program_id = active["program_id"] if active else None
     active_day_id = active["day_id"] if active else None
 
     for p in programs:
         p_days = db.get_program_days(p.id)
-        status = "[bold spring_green1]✓ ACTIVE[/]" if (active_program_id == p.id) else ""
+        status = f"[bold spring_green1]{t('prog_active')}[/]" if (active_program_id == p.id) else ""
         table.add_row(status, p.name, p.created_by.capitalize(), str(len(p_days)))
 
-    console.print("\n[cyan]📋 Available Training Programs[/]\n")
+    console.print(f"\n[cyan]{t('prog_title')}[/]\n")
     console.print(table)
 
     if active and active.get("program"):
         active_prog = active["program"]
-        console.print(f"\n[cyan]{active_prog.name} — Training Days:[/]")
+        console.print(f"\n[cyan]{active_prog.name} — {t('prog_training_days')}[/]")
         p_days = db.get_program_days(active_prog.id)
         for idx, d in enumerate(p_days, start=1):
             d_exs = db.get_day_exercises(d.id)
             ex_count = len(d_exs)
-            suffix = " [bold spring_green1]← today[/]" if (active_day_id == d.id) else ""
-            console.print(f"  {idx}. {d.name} — {ex_count} exercises{suffix}")
+            suffix = f" [bold spring_green1]{t('prog_today')}[/]" if (active_day_id == d.id) else ""
+            console.print(f"  {idx}. {d.name} — {ex_count} {t('prog_exercises')}{suffix}")
 
 
 # ---------------------------------------------------------------------------
@@ -287,14 +289,14 @@ def select_program(
             break
 
     if not target_program:
-        console.print(f"[bright_red]Error:[/] Program '{program_name}' not found.")
+        console.print(f"[bright_red]{t('error_prefix')}[/] {t('selp_not_found', name=program_name)}")
         raise typer.Exit(code=1)
 
     db.set_active_program(target_program.id)
     console.print(
-        f"Program '[cyan]{target_program.name}[/]' is now active! [bold spring_green1]✓[/]"
+        f"Program '[cyan]{target_program.name}[/]' {t('selp_activated')} [bold spring_green1]✓[/]"
     )
-    console.print("[dim]Use 'gymops set-day' to choose today's training day.[/dim]")
+    console.print(f"[dim]{t('selp_hint')}[/dim]")
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +313,7 @@ def set_day(
     active = db.get_active_state()
     if not active or not active.get("program_id"):
         console.print(
-            "[bright_red]Error:[/] No active program. Set one first with: [cyan]gymops select-program[/]"
+            f"[bright_red]{t('error_prefix')}[/] {t('setday_no_prog')}"
         )
         raise typer.Exit(code=1)
 
@@ -324,14 +326,14 @@ def set_day(
             break
 
     if not target_day:
-        console.print(f"[bright_red]Error:[/] Day '{day_name}' not found in the active program.")
+        console.print(f"[bright_red]{t('error_prefix')}[/] {t('setday_not_found', name=day_name)}")
         raise typer.Exit(code=1)
 
     db.set_active_day(target_day.id)
     console.print(
-        f"Training day set to '[cyan]{target_day.name}[/]' [bold spring_green1]✓[/]"
+        f"{t('setday_set')} '[cyan]{target_day.name}[/]' [bold spring_green1]✓[/]"
     )
-    console.print("[dim]Your logs today will be guided by this day's targets.[/dim]")
+    console.print(f"[dim]{t('setday_hint')}[/dim]")
 
 
 # ---------------------------------------------------------------------------
@@ -348,19 +350,19 @@ def prs() -> None:
     all_prs = db.get_all_prs()
 
     if not all_prs:
-        console.print("[dim]No personal records yet. Start logging workouts![/dim]")
+        console.print(f"[dim]{t('prs_empty')}[/dim]")
         return
 
     table = Table(
-        title="[gold1]🏆 Personal Records[/]",
+        title=f"[gold1]{t('prs_title')}[/]",
         box=box.ROUNDED,
         border_style="gold1",
         show_lines=True,
     )
-    table.add_column("Exercise", style="white")
-    table.add_column("Max Weight (kg)", justify="right", style="cyan")
-    table.add_column("Est. 1RM (kg)", justify="right", style="gold1")
-    table.add_column("Date", style="dim")
+    table.add_column(t("prs_exercise"), style="white")
+    table.add_column(t("prs_max_weight"), justify="right", style="cyan")
+    table.add_column(t("prs_1rm"), justify="right", style="gold1")
+    table.add_column(t("prs_date"), style="dim")
 
     for pr in all_prs:
         table.add_row(
@@ -390,24 +392,24 @@ def history(
     try:
         logs = db.get_history(exercise, limit=limit)
     except ValueError as e:
-        console.print(f"[bright_red]Error:[/] {e}")
+        console.print(f"[bright_red]{t('error_prefix')}[/] {e}")
         raise typer.Exit(code=1)
 
     if not logs:
-        console.print(f"[dim]No history found for '{exercise}'.[/dim]")
+        console.print(f"[dim]{t('hist_empty', name=exercise)}[/dim]")
         return
 
     table = Table(
-        title=f"[cyan]📜 History — {logs[0].exercise_name}[/]",
+        title=f"[cyan]{t('hist_title')} — {logs[0].exercise_name}[/]",
         box=box.ROUNDED,
         border_style="cyan",
         show_lines=True,
     )
-    table.add_column("Date", style="dim")
-    table.add_column("Sets", justify="right")
-    table.add_column("Reps", justify="right")
-    table.add_column("Weight (kg)", justify="right", style="white")
-    table.add_column("Est. 1RM (kg)", justify="right", style="gold1")
+    table.add_column(t("hist_date"), style="dim")
+    table.add_column(t("hist_sets"), justify="right")
+    table.add_column(t("hist_reps"), justify="right")
+    table.add_column(t("hist_weight"), justify="right", style="white")
+    table.add_column(t("hist_1rm"), justify="right", style="gold1")
 
     for w in logs:
         table.add_row(
@@ -436,29 +438,26 @@ def stats(
     try:
         sessions = db.get_last_two_sessions(exercise)
     except ValueError as e:
-        console.print(f"[bright_red]Error:[/] {e}")
+        console.print(f"[bright_red]{t('error_prefix')}[/] {e}")
         raise typer.Exit(code=1)
 
     if len(sessions) < 2:
-        console.print(
-            f"[dim]Not enough data for '{exercise}'. "
-            "Log at least 2 sessions first.[/dim]"
-        )
+        console.print(f"[dim]{t('stats_no_data', name=exercise)}[/dim]")
         return
 
     current, previous = sessions[0], sessions[1]
     diff_pct = ((current.epley_1rm - previous.epley_1rm) / previous.epley_1rm) * 100
 
     console.print(
-        f"\n[cyan]📈 Progressive Overload Stats for:[/] [bold]{current.exercise_name}[/]\n"
+        f"\n[cyan]{t('stats_title')}[/] [bold]{current.exercise_name}[/]\n"
     )
     console.print(
-        f"Previous Session ({str(previous.timestamp)[:10]}):\n"
+        f"{t('stats_prev')} ({str(previous.timestamp)[:10]}):\n"
         f"  {previous.weight:.1f} kg x {previous.reps} reps  -->  "
         f"[dim]Est. 1RM: {previous.epley_1rm:.1f} kg[/]\n"
     )
     console.print(
-        f"Current Session ({str(current.timestamp)[:10]}):\n"
+        f"{t('stats_curr')} ({str(current.timestamp)[:10]}):\n"
         f"  {current.weight:.1f} kg x {current.reps} reps  -->  "
         f"[dim]Est. 1RM: {current.epley_1rm:.1f} kg[/]\n"
     )
@@ -466,26 +465,22 @@ def stats(
     if diff_pct > 0:
         console.print(
             Panel(
-                f"[bold green]💪 PROGRESSIVE OVERLOAD SUCCESS![/]\n"
-                f"Estimated strength improved by [bold green]+{diff_pct:.2f}%[/] [bold green]▲[/]",
+                f"[bold green]{t('stats_success')} [bold green]+{diff_pct:.2f}%[/] [bold green]▲[/]",
                 border_style="green",
             )
         )
     elif diff_pct == 0:
         console.print(
             Panel(
-                f"[bold gold1]📊 PLATEAU DETECTED[/]\n"
-                f"No change in estimated 1RM ([bold gold1]+0.00%[/]).\n"
-                "[dim]Suggestion: Try increasing reps or adding 1-2.5 kg next time.[/dim]",
+                f"[bold gold1]{t('stats_plateau')}[/]",
                 border_style="gold1",
             )
         )
     else:
         console.print(
             Panel(
-                f"[bold bright_red]📉 STRENGTH DECREASE DETECTED[/]\n"
-                f"Estimated 1RM dropped by [bold bright_red]{diff_pct:.2f}%[/] [bold bright_red]▼[/]\n"
-                "[dim]This can be normal. Rest, nutrition, and sleep matter![/dim]",
+                f"[bold bright_red]{t('stats_decrease')} [bold bright_red]{diff_pct:.2f}%[/] [bold bright_red]▼[/]\n"
+                f"[dim]{t('stats_note')}[/dim]",
                 border_style="bright_red",
             )
         )
@@ -505,10 +500,32 @@ def digest(
 
     output_file = generate_digest(days=days)
     content = (
-        f"[dim]File Name:[/]     [bold spring_green1]{output_file}[/]\n"
-        f"[dim]Days Analyzed:[/] {days} days\n"
-        f"[dim]Status:[/]        Written to disk [bold spring_green1]✓[/]"
+        f"[dim]{t('digest_file')}[/]     [bold spring_green1]{output_file}[/]\n"
+        f"[dim]{t('digest_days')}[/] {days} {t('digest_days_unit')}\n"
+        f"[dim]{t('status')}[/]        {t('saved_ok')}"
     )
     console.print(
-        Panel(content, title="[bold]📊 Digest Generated Successfully![/]", border_style="cyan")
+        Panel(content, title=f"[bold]{t('digest_title')}[/]", border_style="cyan")
     )
+
+
+# ---------------------------------------------------------------------------
+# gymops set-language
+# ---------------------------------------------------------------------------
+
+@app.command(name="set-language")
+def set_language_cmd(
+    lang: str = typer.Argument(..., help="Language code: 'en' for English, 'es' for Español."),
+) -> None:
+    """Set the display language for all GymOps output (en / es)."""
+    lang = lang.lower().strip()
+    if lang not in SUPPORTED_LANGUAGES:
+        console.print(f"[bright_red]{t('error_prefix')}[/] {t('lang_invalid')}")
+        raise typer.Exit(code=1)
+
+    _save_language(lang)  # type: ignore[arg-type]
+
+    # Confirmation message in the newly selected language
+    current_lang_key = "lang_current_en" if lang == "en" else "lang_current_es"
+    console.print(f"[bold spring_green1]{t('lang_set')}[/]")
+    console.print(f"[dim]{t(current_lang_key)}[/dim]")
