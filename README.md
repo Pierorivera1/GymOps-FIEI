@@ -2,7 +2,7 @@
 
 > Una herramienta de seguimiento de entrenamiento para la terminal — y proyecto final de Base de Datos II en FIEI.
 
-GymOps está pensado para personas que **están comenzando en el gimnasio y no saben por dónde empezar**. La aplicación les ofrece rutinas ya armadas por expertos (como los splits de Jeff Nippard) para que solo tengan que seguirlas, registrar sus series y ver cómo progresan con el tiempo. Para quienes ya tienen experiencia, también permite crear y gestionar sus propios programas personalizados.
+GymOps está pensado para personas que **están comenzando en el gimnasio y no saben por dónde empezar**. La aplicación les ofrece rutinas ya armadas por expertos para que solo tengan que seguirlas, registrar sus series y ver cómo progresan con el tiempo. Para quienes ya tienen experiencia, también permite crear y gestionar sus propios programas personalizados.
 
 Todo funciona desde la terminal: sin apps en la nube, sin cuentas, sin distracciones. Inspirado en [lazygit](https://github.com/jesseduffield/lazygit) — la idea de que una buena herramienta de terminal no debe estorbarte, funcionar localmente y simplemente hacer su trabajo.
 
