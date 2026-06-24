@@ -2,7 +2,7 @@
 ### Base de Datos II — Universidad Nacional de Ingeniería (FIEI)
 **Autor:** Piero Rivera  
 **Gestor:** PostgreSQL 16 (Docker)  
-**Estado:** 🟡 En planificación
+**Estado:** 🟢 SQL Completo (Fases 1–7 finalizadas)
 
 ---
 
@@ -32,11 +32,11 @@ Todo lo demás del formato sí está contemplado y se detalla a continuación.
 | 3.2 Consultas avanzadas | `sql/04_queries.sql` | ✅ Completo |
 | 3.3 Vistas | `sql/05_views.sql` | ✅ Completo |
 | 3.4 Índices | `sql/06_indexes.sql` | ✅ Completo |
-| 3.5 Procedimientos almacenados | `sql/07_procedures.sql` | 🔲 Pendiente |
-| 3.6 Funciones UDF | `sql/08_functions.sql` | 🔲 Pendiente |
-| 3.7 Triggers | `sql/09_triggers.sql` | 🔲 Pendiente |
+| 3.5 Procedimientos almacenados | `sql/07_procedures.sql` | ✅ Completo |
+| 3.6 Funciones UDF | `sql/08_functions.sql` | ✅ Completo |
+| 3.7 Triggers | `sql/09_triggers.sql` | ✅ Completo |
 | ~~4. Administración y Seguridad~~ | ~~Excluido de esta versión~~ | ❌ Excluido |
-| 5. Aplicación | CLI Python con psycopg2 | 🟡 Migración pendiente |
+| 5. Aplicación | CLI Python con psycopg2 | ✅ Completo |
 | 6. Entregables | Documentación, scripts, código fuente | 🟡 En progreso |
 
 ---
@@ -242,8 +242,8 @@ audit_log (id, table_name, operation, old_data, new_data, changed_at)
 | Documento del proyecto | `DESCRIPCION_PROYECTO.md` | ✅ |
 | Planning | `PLANNING.md` (este archivo) | ✅ |
 | Diagramas | `diagramas/` | 🔲 |
-| Scripts SQL (DDL a Triggers) | `sql/01` al `sql/09` | 🔲 |
-| Código fuente app | `gymops/` (root del repo) | 🟡 En migración |
+| Scripts SQL (DDL a Triggers) | `sql/01` al `sql/09` | ✅ |
+| Código fuente app | `gymops/` (root del repo) | ✅ |
 | Manual básico | `docs/manual_usuario.md` | 🔲 |
 | Backup de BD | `backup/gymops_backup.sql` | 🔲 |
 

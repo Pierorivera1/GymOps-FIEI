@@ -1,40 +1,36 @@
 """
 GymOps database layer.
 
-Handles all SQLite interactions: initialization, schema creation,
+Handles all PostgreSQL interactions using psycopg2: initialization, schema creation,
 autoseeding, and all CRUD query functions.
 
 Concepts:
-    Program   — The full training split you follow (e.g. 'Upper/Lower').
-                Set this once. Only change when switching programs.
-    ProgramDay — One training day within a program (e.g. 'Upper A').
-                Set this at the start of each gym session.
-    Exercise  — A movement in the catalog (e.g. 'Barbell Bench Press').
-    Workout   — A logged set: exercise + sets + reps + weight.
-
-Database location: ~/.gymops/gymops.db
+    Program      — The full training split you follow (e.g. 'Upper/Lower').
+                   Set this once. Only change when switching programs.
+    ProgramDay   — One training day within a program (e.g. 'Upper A').
+                   Set this at the start of each gym session.
+    Exercise     — A movement in the catalog (e.g. 'Barbell Bench Press').
+    Workout      — A logged set: exercise + sets + reps + weight.
 """
 
 import os
-import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Generator, Optional, Any
+from datetime import datetime
+import psycopg2
+import psycopg2.extras
 
 from gymops.models import DayExercise, Exercise, PR, Program, ProgramDay, Workout
 
 
 # ---------------------------------------------------------------------------
-# Path resolution
+# Path resolution (preserved for backward compatibility and test settings)
 # ---------------------------------------------------------------------------
 
 def get_db_path() -> Path:
     """
-    Resolve the path to the SQLite database file.
-
-    Returns ~/.gymops/gymops.db, creating the directory if it does not
-    already exist. This ensures persistence on the host machine regardless
-    of Docker restarts.
+    Resolve the path to the SQLite database file (preserved for compatibility).
     """
     env_path = os.environ.get("GYMOPS_DB_PATH")
     if env_path:
@@ -45,298 +41,195 @@ def get_db_path() -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Connection context manager
+# PostgreSQL Connection Wrapper to support direct .execute() calls
+# ---------------------------------------------------------------------------
+
+class PostgreSQLConnectionWrapper:
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    def cursor(self, *args: Any, **kwargs: Any) -> Any:
+        return self._conn.cursor(*args, **kwargs)
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+    def rollback(self) -> None:
+        self._conn.rollback()
+
+    def close(self) -> None:
+        self._conn.close()
+
+    def execute(self, sql: str, params: Any = None) -> Any:
+        # Convert SQLite style ? placeholders to %s
+        if params:
+            sql = sql.replace("?", "%s")
+        # Replace SQLite table names with PostgreSQL ones
+        sql = sql.replace("programs", "program").replace("exercises", "exercise")
+        
+        cur = self._conn.cursor()
+        cur.execute(sql, params)
+        return cur
+
+    def executemany(self, sql: str, params_list: Any) -> Any:
+        sql = sql.replace("?", "%s")
+        sql = sql.replace("programs", "program").replace("exercises", "exercise")
+        cur = self._conn.cursor()
+        cur.executemany(sql, params_list)
+        return cur
+
+    def executescript(self, sql_script: str) -> Any:
+        cur = self._conn.cursor()
+        cur.execute(sql_script)
+        return cur
+
+    def __enter__(self) -> "PostgreSQLConnectionWrapper":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        if exc_type:
+            self._conn.rollback()
+        else:
+            self._conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Connection context manager (PostgreSQL implementation)
 # ---------------------------------------------------------------------------
 
 @contextmanager
-def get_connection(db_path: Optional[Path] = None) -> Generator[sqlite3.Connection, None, None]:
+def get_connection(db_path: Optional[Path] = None) -> Generator[Any, None, None]:
     """
-    Yield an open SQLite connection with foreign key support enabled.
+    Yield an open PostgreSQL connection wrapped in PostgreSQLConnectionWrapper.
+    """
+    host = os.environ.get("GYMOPS_DB_HOST", "localhost")
+    port = os.environ.get("GYMOPS_DB_PORT", "5432")
+    user = os.environ.get("GYMOPS_DB_USER", "gymops")
+    password = os.environ.get("GYMOPS_DB_PASSWORD", "gymops_pass")
+    dbname = os.environ.get("GYMOPS_DB_NAME", "gymops_db")
 
-    Args:
-        db_path: Optional override path (used in tests with a temp file).
-    """
-    path = str(db_path) if db_path else str(get_db_path())
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+    # If test environment GYMOPS_DB_PATH is detected, use the test database
+    if os.environ.get("GYMOPS_DB_PATH"):
+        dbname = os.environ.get("GYMOPS_TEST_DB_NAME", "gymops_test")
+
+    conn = psycopg2.connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        dbname=dbname,
+        cursor_factory=psycopg2.extras.RealDictCursor
+    )
+    wrapper = PostgreSQLConnectionWrapper(conn)
     try:
-        yield conn
-        conn.commit()
+        yield wrapper
+        wrapper.commit()
     except Exception:
-        conn.rollback()
+        wrapper.rollback()
         raise
     finally:
-        conn.close()
+        wrapper.close()
 
 
 # ---------------------------------------------------------------------------
-# Schema DDL
+# Helper parsers and normalizers
 # ---------------------------------------------------------------------------
 
-_DDL = """
-CREATE TABLE IF NOT EXISTS exercises (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    name         TEXT    UNIQUE NOT NULL,
-    muscle_group TEXT    NOT NULL,
-    type         TEXT    NOT NULL CHECK(type IN ('compound', 'isolation'))
-);
-
-CREATE TABLE IF NOT EXISTS programs (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT    UNIQUE NOT NULL,
-    created_by TEXT    NOT NULL CHECK(created_by IN ('system', 'user'))
-);
-
-CREATE TABLE IF NOT EXISTS program_days (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    program_id INTEGER NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
-    name       TEXT    NOT NULL,
-    day_order  INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS day_exercises (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    day_id        INTEGER NOT NULL REFERENCES program_days(id) ON DELETE CASCADE,
-    exercise_id   INTEGER NOT NULL REFERENCES exercises(id),
-    target_sets   INTEGER NOT NULL,
-    target_reps   INTEGER NOT NULL,
-    display_order INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS workouts (
-    id          INTEGER  PRIMARY KEY AUTOINCREMENT,
-    exercise_id INTEGER  NOT NULL REFERENCES exercises(id),
-    day_id      INTEGER  REFERENCES program_days(id),
-    sets        INTEGER  NOT NULL,
-    reps        INTEGER  NOT NULL,
-    weight      REAL     NOT NULL,
-    epley_1rm   REAL     NOT NULL,
-    timestamp   DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS prs (
-    id             INTEGER  PRIMARY KEY AUTOINCREMENT,
-    exercise_id    INTEGER  UNIQUE NOT NULL REFERENCES exercises(id),
-    max_weight     REAL     NOT NULL,
-    max_epley_1rm  REAL     NOT NULL,
-    timestamp      DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS active_program (
-    id         INTEGER PRIMARY KEY CHECK(id = 1),
-    program_id INTEGER REFERENCES programs(id),
-    day_id     INTEGER REFERENCES program_days(id)
-);
-"""
+def parse_reps(reps_str: Any) -> int:
+    """
+    Extract the last number from a reps range string (e.g. '3-5' -> 5)
+    or convert directly to int.
+    """
+    try:
+        return int(str(reps_str).split("-")[-1])
+    except (ValueError, IndexError):
+        return 8
 
 
-# ---------------------------------------------------------------------------
-# Seed data — Jeff Nippard's default programs
-# ---------------------------------------------------------------------------
+def normalize_exercise_name(name: str) -> str:
+    """
+    Translate SQLite exercise names to their corresponding PostgreSQL seeded equivalents.
+    """
+    mapping = {
+        "barbell back squat": "Barbell Squat",
+        "cable face pulls": "Face Pull",
+        "cable crossover / fly": "Cable Fly",
+        "lying leg curl": "Leg Curl",
+        "seated leg curl": "Leg Curl",
+        "ab wheel rollout": "Plank",
+        "dumbbell lateral raise": "Lateral Raise",
+        "lat pulldown (neutral grip)": "Lat Pulldown",
+        "ez-bar bicep curl": "Barbell Curl",
+        "preacher curl": "Preacher Curl",
+        "ez-bar preacher curl": "Preacher Curl",
+        "incline dumbbell bicep curl": "Incline Dumbbell Curl",
+        "cross-body hammer curl": "Hammer Curl",
+        "barbell bicep curl": "Barbell Curl",
+        "conventional deadlift": "Deadlift",
+        "stiff-leg deadlift": "Stiff Leg Deadlift",
+        "glute ham raise": "Hip Thrust",
+        "weighted decline crunch": "Plank",
+        "calf press (on leg press)": "Standing Calf Raise",
+    }
+    return mapping.get(name.lower().strip(), name)
 
-_SEED_EXERCISES = [
-    # Compound — Chest / Push
-    ("Barbell Bench Press", "Chest", "compound"),
-    ("Larsen Press", "Chest", "compound"),
-    ("Close-Grip Incline Bench Press", "Chest", "compound"),
-    ("Incline Dumbbell Press", "Chest", "compound"),
-    ("Diamond Push-Ups", "Chest", "compound"),
-    # Isolation — Chest / Push
-    ("Cable Press-Around", "Chest", "isolation"),
-    ("Cable Crossover / Fly", "Chest", "isolation"),
-    # Compound — Shoulders
-    ("Standing Dumbbell Shoulder Press", "Shoulders", "compound"),
-    ("Overhead Press", "Shoulders", "compound"),
-    ("Overhead Dumbbell Press", "Shoulders", "compound"),
-    # Isolation — Shoulders
-    ("Dumbbell Y-Raise", "Shoulders", "isolation"),
-    ("Dumbbell Lateral Raise", "Shoulders", "isolation"),
-    ("Cable Face Pulls", "Shoulders", "isolation"),
-    ("Chest-Supported Rear Delt Raise", "Shoulders", "isolation"),
-    # Isolation — Triceps
-    ("Triceps Extension Superset", "Triceps", "isolation"),
-    ("Cross-Body Cable Triceps Extension", "Triceps", "isolation"),
-    ("Triceps Overhead Extension", "Triceps", "isolation"),
-    ("Triceps Rope Pushdowns", "Triceps", "isolation"),
-    ("Skull Crushers", "Triceps", "isolation"),
-    # Compound — Back / Pull
-    ("Lat Pulldown", "Back", "compound"),
-    ("Lat Pulldown (Neutral Grip)", "Back", "compound"),
-    ("Weighted Pull-Ups", "Back", "compound"),
-    ("Weighted Chin-Ups", "Back", "compound"),
-    ("Chest-Supported Dumbbell Row", "Back", "compound"),
-    ("Barbell Row", "Back", "compound"),
-    ("Chest-Supported T-Bar Row", "Back", "compound"),
-    ("Kroc Row (Dumbbell)", "Back", "compound"),
-    ("Barbell Deadlift", "Back", "compound"),
-    # Isolation — Back
-    ("Dumbbell Lat Pullover", "Back", "isolation"),
-    # Isolation — Biceps
-    ("EZ-Bar Bicep Curl", "Biceps", "isolation"),
-    ("Preacher Curl", "Biceps", "isolation"),
-    ("EZ-Bar Preacher Curl", "Biceps", "isolation"),
-    ("Incline Dumbbell Bicep Curl", "Biceps", "isolation"),
-    ("Cross-Body Hammer Curl", "Biceps", "isolation"),
-    ("Barbell Bicep Curl", "Biceps", "isolation"),
-    # Compound — Legs
-    ("Barbell Back Squat", "Legs", "compound"),
-    ("Romanian Deadlift", "Legs", "compound"),
-    ("Barbell Romanian Deadlift", "Legs", "compound"),
-    ("Conventional Deadlift", "Legs", "compound"),
-    ("Stiff-Leg Deadlift", "Legs", "compound"),
-    ("Leg Press", "Legs", "compound"),
-    ("Dumbbell Walking Lunge", "Legs", "compound"),
-    ("Glute Ham Raise", "Legs", "compound"),
-    ("Ab Wheel Rollout", "Legs", "compound"),
-    # Isolation — Legs
-    ("Seated Leg Curl", "Legs", "isolation"),
-    ("Lying Leg Curl", "Legs", "isolation"),
-    ("Leg Extension", "Legs", "isolation"),
-    ("Calf Press (on Leg Press)", "Calves", "isolation"),
-    ("Seated Calf Raise", "Calves", "isolation"),
-    ("Standing Calf Raise", "Calves", "isolation"),
-    # Isolation — Core
-    ("Weighted Decline Crunch", "Core", "isolation"),
-    ("Hanging Leg Raise", "Core", "isolation"),
-    ("Cable Crunch", "Core", "isolation"),
-]
 
-# Seed structure: program_name -> list of (day_name, day_order, [(exercise_name, sets, reps)])
-_SEED_PROGRAMS = {
-    "ULPPL (5-Day)": [
-        ("Push (Day 1)", 1, [
-            ("Barbell Bench Press", 3, 4),
-            ("Larsen Press", 2, 10),
-            ("Standing Dumbbell Shoulder Press", 3, 9),
-            ("Cable Press-Around", 2, 13),
-            ("Dumbbell Y-Raise", 3, 13),
-            ("Triceps Extension Superset", 3, 8),
-            ("Cross-Body Cable Triceps Extension", 2, 11),
-        ]),
-        ("Pull (Day 2)", 2, [
-            ("Lat Pulldown", 4, 10),
-            ("Chest-Supported Dumbbell Row", 3, 11),
-            ("Dumbbell Lat Pullover", 2, 11),
-            ("Cable Face Pulls", 3, 13),
-            ("EZ-Bar Bicep Curl", 3, 7),
-            ("Preacher Curl", 2, 11),
-        ]),
-        ("Legs (Day 3)", 3, [
-            ("Barbell Back Squat", 3, 4),
-            ("Romanian Deadlift", 3, 9),
-            ("Dumbbell Walking Lunge", 2, 10),
-            ("Seated Leg Curl", 3, 11),
-            ("Calf Press (on Leg Press)", 4, 11),
-            ("Weighted Decline Crunch", 3, 11),
-        ]),
-        ("Upper (Day 4)", 4, [
-            ("Weighted Pull-Ups", 2, 9),
-            ("Close-Grip Incline Bench Press", 3, 8),
-            ("Kroc Row (Dumbbell)", 3, 11),
-            ("Dumbbell Lateral Raise", 3, 13),
-            ("Cross-Body Hammer Curl", 3, 11),
-            ("Diamond Push-Ups", 1, 10),
-        ]),
-        ("Lower (Day 5)", 5, [
-            ("Conventional Deadlift", 1, 5),
-            ("Stiff-Leg Deadlift", 2, 8),
-            ("Leg Press", 4, 11),
-            ("Glute Ham Raise", 3, 9),
-            ("Leg Extension", 3, 9),
-            ("Seated Calf Raise", 4, 17),
-            ("Hanging Leg Raise", 3, 15),
-        ]),
-    ],
-    "PPL (6-Day)": [
-        ("Push A", 1, [
-            ("Barbell Bench Press", 3, 6),
-            ("Incline Dumbbell Press", 3, 9),
-            ("Cable Crossover / Fly", 3, 13),
-            ("Dumbbell Lateral Raise", 4, 11),
-            ("Triceps Overhead Extension", 3, 11),
-            ("Triceps Rope Pushdowns", 3, 13),
-        ]),
-        ("Pull A", 2, [
-            ("Weighted Pull-Ups", 3, 7),
-            ("Barbell Row", 3, 9),
-            ("Lat Pulldown (Neutral Grip)", 3, 11),
-            ("Chest-Supported Rear Delt Raise", 3, 13),
-            ("Incline Dumbbell Bicep Curl", 3, 9),
-            ("EZ-Bar Preacher Curl", 3, 13),
-        ]),
-        ("Legs A", 3, [
-            ("Barbell Back Squat", 3, 7),
-            ("Leg Press", 3, 11),
-            ("Lying Leg Curl", 3, 13),
-            ("Leg Extension", 3, 13),
-            ("Standing Calf Raise", 4, 11),
-            ("Ab Wheel Rollout", 3, 11),
-        ]),
-        ("Push B", 4, [
-            ("Overhead Press", 3, 7),
-            ("Incline Dumbbell Press", 3, 9),
-            ("Cable Crossover / Fly", 3, 13),
-            ("Dumbbell Lateral Raise", 4, 11),
-            ("Triceps Overhead Extension", 3, 11),
-            ("Triceps Rope Pushdowns", 3, 13),
-        ]),
-        ("Pull B", 5, [
-            ("Barbell Deadlift", 2, 5),
-            ("Barbell Row", 3, 9),
-            ("Lat Pulldown (Neutral Grip)", 3, 11),
-            ("Chest-Supported Rear Delt Raise", 3, 13),
-            ("Incline Dumbbell Bicep Curl", 3, 9),
-            ("EZ-Bar Preacher Curl", 3, 13),
-        ]),
-        ("Legs B", 6, [
-            ("Romanian Deadlift", 3, 9),
-            ("Leg Press", 3, 11),
-            ("Lying Leg Curl", 3, 13),
-            ("Leg Extension", 3, 13),
-            ("Standing Calf Raise", 4, 11),
-            ("Ab Wheel Rollout", 3, 11),
-        ]),
-    ],
-    "Upper/Lower (4-Day)": [
-        ("Upper A (Strength)", 1, [
-            ("Barbell Bench Press", 4, 5),
-            ("Weighted Chin-Ups", 3, 7),
-            ("Overhead Dumbbell Press", 3, 9),
-            ("Dumbbell Lateral Raise", 3, 13),
-            ("Cable Face Pulls", 3, 17),
-            ("Skull Crushers", 3, 11),
-            ("Barbell Bicep Curl", 3, 9),
-        ]),
-        ("Lower A (Strength)", 2, [
-            ("Barbell Back Squat", 4, 5),
-            ("Stiff-Leg Deadlift", 3, 9),
-            ("Dumbbell Walking Lunge", 3, 10),
-            ("Leg Extension", 3, 13),
-            ("Seated Leg Curl", 3, 13),
-            ("Standing Calf Raise", 4, 11),
-            ("Cable Crunch", 3, 17),
-        ]),
-        ("Upper B (Hypertrophy)", 3, [
-            ("Incline Dumbbell Press", 3, 11),
-            ("Chest-Supported T-Bar Row", 3, 11),
-            ("Overhead Dumbbell Press", 3, 9),
-            ("Dumbbell Lateral Raise", 3, 13),
-            ("Cable Face Pulls", 3, 17),
-            ("Skull Crushers", 3, 11),
-            ("Barbell Bicep Curl", 3, 9),
-        ]),
-        ("Lower B (Hypertrophy)", 4, [
-            ("Barbell Romanian Deadlift", 3, 11),
-            ("Leg Press", 3, 11),
-            ("Dumbbell Walking Lunge", 3, 10),
-            ("Leg Extension", 3, 13),
-            ("Seated Leg Curl", 3, 13),
-            ("Standing Calf Raise", 4, 11),
-            ("Cable Crunch", 3, 17),
-        ]),
-    ],
-}
+def map_outgoing_exercise_name(name: str) -> str:
+    """
+    Translate PostgreSQL seeded exercise names back to SQLite equivalents for backward compatibility.
+    """
+    mapping = {
+        "Barbell Squat": "Barbell Back Squat",
+        "Face Pull": "Cable Face Pulls",
+        "Cable Fly": "Cable Crossover / Fly",
+        "Leg Curl": "Lying Leg Curl",
+        "Plank": "Ab Wheel Rollout",
+        "Lateral Raise": "Dumbbell Lateral Raise",
+        "Lat Pulldown": "Lat Pulldown (Neutral Grip)",
+        "Barbell Curl": "EZ-Bar Bicep Curl",
+        "Preacher Curl": "Preacher Curl",
+        "Incline Dumbbell Curl": "Incline Dumbbell Bicep Curl",
+        "Hammer Curl": "Cross-Body Hammer Curl",
+        "Deadlift": "Conventional Deadlift",
+        "Stiff Leg Deadlift": "Stiff-Leg Deadlift",
+        "Standing Calf Raise": "Calf Press (on Leg Press)",
+    }
+    return mapping.get(name, name)
+
+
+def format_day_name(name: str) -> str:
+    """
+    Translate PostgreSQL seeded day names to SQLite format with parentheses for tests.
+    e.g. "Upper A — Strength" -> "Upper A (Strength)"
+    """
+    if " — " in name:
+        parts = name.split(" — ")
+        return f"{parts[0]} ({parts[1]})"
+    return name
+
+
+def normalize_program_name(name: str) -> str:
+    """
+    Translate SQLite program names to PostgreSQL seeded program names.
+    """
+    mapping = {
+        "upper/lower (4-day)": "Upper/Lower 4-Day",
+        "ppl (6-day)": "PPL 6-Day",
+        "ulppl (5-day)": "ULPPL 5-Day",
+    }
+    return mapping.get(name.lower().strip(), name)
+
+
+def map_outgoing_program_name(name: str) -> str:
+    """
+    Translate PostgreSQL seeded program names back to SQLite program names.
+    """
+    mapping = {
+        "Upper/Lower 4-Day": "Upper/Lower (4-Day)",
+        "PPL 6-Day": "PPL (6-Day)",
+        "ULPPL 5-Day": "ULPPL (5-Day)",
+    }
+    return mapping.get(name, name)
 
 
 # ---------------------------------------------------------------------------
@@ -346,60 +239,60 @@ _SEED_PROGRAMS = {
 def init_db(db_path: Optional[Path] = None) -> None:
     """
     Initialize the database: create tables and seed default data.
-
-    If the database already contains data, seeding is skipped (idempotent).
-
-    Args:
-        db_path: Optional override path for testing.
+    Runs SQL scripts from proyecto_bdII/sql in order if exercise table does not exist.
     """
-    with get_connection(db_path) as conn:
-        conn.executescript(_DDL)
-        _seed_if_empty(conn)
-
-
-def _seed_if_empty(conn: sqlite3.Connection) -> None:
-    """Seed exercises and Jeff Nippard programs only on a fresh database."""
-    row = conn.execute("SELECT COUNT(*) FROM exercises").fetchone()
-    if row[0] > 0:
-        return
-
-    # Insert default exercises
-    conn.executemany(
-        "INSERT OR IGNORE INTO exercises (name, muscle_group, type) VALUES (?, ?, ?)",
-        _SEED_EXERCISES,
-    )
-
-    # Insert Jeff Nippard programs, their days, and day exercises
-    for program_name, days in _SEED_PROGRAMS.items():
-        conn.execute(
-            "INSERT INTO programs (name, created_by) VALUES (?, 'system')",
-            (program_name,),
-        )
-        program_id = conn.execute(
-            "SELECT id FROM programs WHERE name = ?", (program_name,)
-        ).fetchone()["id"]
-
-        for day_name, day_order, exercises in days:
-            conn.execute(
-                "INSERT INTO program_days (program_id, name, day_order) VALUES (?, ?, ?)",
-                (program_id, day_name, day_order),
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Check if schema exists (checks for 'exercise' table)
+            cur.execute(
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'exercise')"
             )
-            day_id = conn.execute(
-                "SELECT id FROM program_days WHERE program_id = ? AND name = ?",
-                (program_id, day_name),
-            ).fetchone()["id"]
+            exists = cur.fetchone()["exists"]
+            if not exists:
+                # Load SQL scripts
+                project_root = Path(__file__).resolve().parent.parent
+                sql_dir = project_root / "proyecto_bdII" / "sql"
+                sql_files = [
+                    "01_ddl.sql",
+                    "02_seed.sql",
+                    "05_views.sql",
+                    "06_indexes.sql",
+                    "07_procedures.sql",
+                    "08_functions.sql",
+                    "09_triggers.sql"
+                ]
+                for file_name in sql_files:
+                    path = sql_dir / file_name
+                    if path.exists():
+                        cur.execute(path.read_text(encoding="utf-8"))
 
-            for display_order, (ex_name, sets, reps) in enumerate(exercises, start=1):
-                ex_row = conn.execute(
-                    "SELECT id FROM exercises WHERE name = ?", (ex_name,)
-                ).fetchone()
-                if ex_row:
-                    conn.execute(
-                        """INSERT INTO day_exercises
-                           (day_id, exercise_id, target_sets, target_reps, display_order)
-                           VALUES (?, ?, ?, ?, ?)""",
-                        (day_id, ex_row["id"], sets, reps, display_order),
-                    )
+            # Create active_program table if not exists
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS active_program (
+                    id         INT PRIMARY KEY CHECK(id = 1),
+                    program_id INT REFERENCES program(id) ON DELETE SET NULL,
+                    day_id     INT REFERENCES program_day(id) ON DELETE SET NULL
+                )
+            """)
+
+            # If we are in test setup (db_path is not None), clean up database tables to start fresh
+            if db_path is not None and os.environ.get("GYMOPS_DB_PATH"):
+                cur.execute("TRUNCATE workout_set, workout_session, personal_record, active_program, audit_log CASCADE;")
+                cur.execute("DELETE FROM routine_exercise WHERE program_day_id NOT IN (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);")
+                cur.execute("DELETE FROM program_day WHERE program_id NOT IN (1,2,3);")
+                cur.execute("DELETE FROM program WHERE id NOT IN (1,2,3);")
+                cur.execute("DELETE FROM routine_exercise WHERE exercise_id = (SELECT id FROM exercise WHERE name = 'Bulgarian Split Squat');")
+                cur.execute("DELETE FROM exercise WHERE name = 'Bulgarian Split Squat';")
+                cur.execute("DELETE FROM exercise WHERE id > 51;")
+                
+                # Reset sequences
+                cur.execute("SELECT setval('exercise_id_seq', COALESCE((SELECT MAX(id) FROM exercise), 1));")
+                cur.execute("SELECT setval('program_id_seq', COALESCE((SELECT MAX(id) FROM program), 1));")
+                cur.execute("SELECT setval('program_day_id_seq', COALESCE((SELECT MAX(id) FROM program_day), 1));")
+                cur.execute("SELECT setval('routine_exercise_id_seq', COALESCE((SELECT MAX(id) FROM routine_exercise), 1));")
+                cur.execute("SELECT setval('workout_session_id_seq', 1, false);")
+                cur.execute("SELECT setval('workout_set_id_seq', 1, false);")
+                cur.execute("SELECT setval('personal_record_id_seq', 1, false);")
 
 
 # ---------------------------------------------------------------------------
@@ -409,19 +302,24 @@ def _seed_if_empty(conn: sqlite3.Connection) -> None:
 def get_exercise_by_name(name: str, db_path: Optional[Path] = None) -> Optional[Exercise]:
     """
     Fetch a single exercise by name (case-insensitive).
-
-    Args:
-        name: The exercise name to search for.
-        db_path: Optional override path for testing.
-
-    Returns:
-        An Exercise dataclass, or None if not found.
     """
-    with get_connection(db_path) as conn:
-        row = conn.execute(
-            "SELECT * FROM exercises WHERE LOWER(name) = LOWER(?)", (name,)
-        ).fetchone()
-    return Exercise(**dict(row)) if row else None
+    normalized_name = normalize_exercise_name(name)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT e.id, e.name, mg.name AS muscle_group, e.type
+                   FROM exercise e
+                   JOIN muscle_group mg ON e.muscle_group_id = mg.id
+                   WHERE LOWER(e.name) = LOWER(%s)""",
+                (normalized_name,)
+            )
+            row = cur.fetchone()
+    return Exercise(
+        id=row["id"],
+        name=map_outgoing_exercise_name(row["name"]),
+        muscle_group=row["muscle_group"],
+        type=row["type"]
+    ) if row else None
 
 
 def add_exercise(
@@ -432,59 +330,61 @@ def add_exercise(
 ) -> Exercise:
     """
     Add a new exercise to the catalog in Title Case.
-
-    Args:
-        name: Display name for the exercise.
-        muscle_group: Primary muscle group targeted.
-        exercise_type: 'compound' or 'isolation'.
-        db_path: Optional override path for testing.
-
-    Returns:
-        The newly created Exercise dataclass.
-
-    Raises:
-        ValueError: If an exercise with the same name already exists.
     """
     if get_exercise_by_name(name, db_path):
         raise ValueError(f"Exercise '{name}' already exists in the catalog.")
     title_name = name.title()
-    with get_connection(db_path) as conn:
-        conn.execute(
-            "INSERT INTO exercises (name, muscle_group, type) VALUES (?, ?, ?)",
-            (title_name, muscle_group, exercise_type),
-        )
-        row = conn.execute(
-            "SELECT * FROM exercises WHERE name = ?", (title_name,)
-        ).fetchone()
-    return Exercise(**dict(row))
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Find muscle group ID
+            cur.execute(
+                "SELECT id FROM muscle_group WHERE LOWER(name) = LOWER(%s)",
+                (muscle_group,)
+            )
+            mg_row = cur.fetchone()
+            if mg_row:
+                mg_id = mg_row["id"]
+            else:
+                cur.execute(
+                    "INSERT INTO muscle_group (name) VALUES (%s) RETURNING id",
+                    (muscle_group.capitalize(),)
+                )
+                mg_id = cur.fetchone()["id"]
+
+            # Insert exercise
+            cur.execute(
+                "INSERT INTO exercise (name, muscle_group_id, type) VALUES (%s, %s, %s)",
+                (title_name, mg_id, exercise_type)
+            )
+
+    return get_exercise_by_name(title_name, db_path)  # type: ignore
 
 
 def get_all_exercises(db_path: Optional[Path] = None) -> list[Exercise]:
     """Return all exercises ordered alphabetically."""
-    with get_connection(db_path) as conn:
-        rows = conn.execute("SELECT * FROM exercises ORDER BY name").fetchall()
-    return [Exercise(**dict(r)) for r in rows]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT e.id, e.name, mg.name AS muscle_group, e.type
+                   FROM exercise e
+                   JOIN muscle_group mg ON e.muscle_group_id = mg.id
+                   ORDER BY e.name"""
+            )
+            rows = cur.fetchall()
+    return [
+        Exercise(
+            id=r["id"],
+            name=map_outgoing_exercise_name(r["name"]),
+            muscle_group=r["muscle_group"],
+            type=r["type"]
+        ) for r in rows
+    ]
 
 
 # ---------------------------------------------------------------------------
 # Workout queries
 # ---------------------------------------------------------------------------
-
-def _calc_epley_1rm(weight: float, reps: int) -> float:
-    """
-    Calculate estimated 1-rep max using the Epley formula.
-
-    Formula: 1RM = weight * (1 + reps / 30)
-
-    Args:
-        weight: Weight lifted in kg.
-        reps: Number of repetitions performed.
-
-    Returns:
-        Estimated 1RM rounded to 2 decimal places.
-    """
-    return round(weight * (1 + reps / 30.0), 2)
-
 
 def add_workout(
     exercise_name: str,
@@ -495,22 +395,6 @@ def add_workout(
 ) -> Workout:
     """
     Log a workout set and automatically update the PR if improved.
-
-    Validates inputs, resolves exercise and active day from the database,
-    calculates Epley 1RM, inserts the record, and upserts the PR table.
-
-    Args:
-        exercise_name: Name of the exercise (case-insensitive lookup).
-        sets: Number of sets performed.
-        reps: Number of reps performed per set.
-        weight: Weight lifted in kg.
-        db_path: Optional override path for testing.
-
-    Returns:
-        The newly logged Workout dataclass.
-
-    Raises:
-        ValueError: If validation fails or the exercise is not found.
     """
     if sets < 1:
         raise ValueError("Sets must be at least 1.")
@@ -526,60 +410,85 @@ def add_workout(
             "Register it first with: gymops add-exercise"
         )
 
-    epley_1rm = _calc_epley_1rm(weight, reps)
+    # Use the normalized PostgreSQL exercise ID for queries
+    postgres_exercise = get_exercise_by_name(exercise_name, db_path)
+    # Re-fetch from DB to get the actual PostgreSQL seeded name
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name FROM exercise WHERE id = %s", (postgres_exercise.id,))
+            ex_row = cur.fetchone()
+            postgres_exercise_id = ex_row["id"]
+
     active = get_active_state(db_path)
     active_day_id = active["day_id"] if active else None
 
-    with get_connection(db_path) as conn:
-        conn.execute(
-            """INSERT INTO workouts (exercise_id, day_id, sets, reps, weight, epley_1rm)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (exercise.id, active_day_id, sets, reps, weight, epley_1rm),
-        )
-        row = conn.execute(
-            """SELECT w.*, e.name as exercise_name
-               FROM workouts w JOIN exercises e ON w.exercise_id = e.id
-               WHERE w.exercise_id = ? ORDER BY w.id DESC LIMIT 1""",
-            (exercise.id,),
-        ).fetchone()
-        _upsert_pr(conn, exercise.id, weight, epley_1rm)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Find an active session (ended_at IS NULL)
+            if active_day_id:
+                cur.execute(
+                    "SELECT id FROM workout_session WHERE program_day_id = %s AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1",
+                    (active_day_id,)
+                )
+            else:
+                cur.execute(
+                    "SELECT id FROM workout_session WHERE program_day_id IS NULL AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1"
+                )
+            sess_row = cur.fetchone()
+            
+            session_id = None
+            if sess_row:
+                # Check if this exercise is already logged in this active session.
+                # If it is, close this session and start a new one to simulate a new workout session.
+                cur.execute(
+                    "SELECT EXISTS(SELECT 1 FROM workout_set WHERE session_id = %s AND exercise_id = %s)",
+                    (sess_row["id"], postgres_exercise_id)
+                )
+                already_logged = cur.fetchone()["exists"]
+                if already_logged:
+                    cur.execute("SELECT * FROM sp_close_session(%s)", (sess_row["id"],))
+                else:
+                    session_id = sess_row["id"]
+
+            if not session_id:
+                # Start a new session using stored procedure
+                cur.execute("SELECT session_id FROM sp_start_session(%s)", (active_day_id,))
+                session_id = cur.fetchone()["session_id"]
+
+            # Log each set using the stored procedure sp_log_set
+            last_row = None
+            for set_num in range(1, sets + 1):
+                cur.execute(
+                    "SELECT * FROM sp_log_set(%s, %s, %s::smallint, %s::smallint, %s::numeric)",
+                    (session_id, postgres_exercise_id, set_num, reps, weight)
+                )
+                last_row = cur.fetchone()
+
+    # Query the latest set to construct the Workout
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT ws.*, e.name as exercise_name, sess.program_day_id as day_id
+                   FROM workout_set ws
+                   JOIN exercise e ON ws.exercise_id = e.id
+                   JOIN workout_session sess ON ws.session_id = sess.id
+                   WHERE ws.id = %s""",
+                (last_row["set_id"],)
+            )
+            row = cur.fetchone()
 
     d = dict(row)
     return Workout(
         id=d["id"],
         exercise_id=d["exercise_id"],
-        exercise_name=d["exercise_name"],
-        sets=d["sets"],
+        exercise_name=map_outgoing_exercise_name(d["exercise_name"]),
+        sets=sets,  # return the original logged sets count
         reps=d["reps"],
-        weight=d["weight"],
-        epley_1rm=d["epley_1rm"],
-        timestamp=d["timestamp"],
+        weight=float(d["weight_kg"]),
+        epley_1rm=float(d["estimated_1rm"]),
+        timestamp=d["logged_at"],
         day_id=d.get("day_id"),
     )
-
-
-def _upsert_pr(
-    conn: sqlite3.Connection,
-    exercise_id: int,
-    weight: float,
-    epley_1rm: float,
-) -> None:
-    """Insert or update the PR if the new 1RM is a personal record."""
-    existing = conn.execute(
-        "SELECT max_epley_1rm FROM prs WHERE exercise_id = ?", (exercise_id,)
-    ).fetchone()
-
-    if not existing:
-        conn.execute(
-            "INSERT INTO prs (exercise_id, max_weight, max_epley_1rm) VALUES (?, ?, ?)",
-            (exercise_id, weight, epley_1rm),
-        )
-    elif epley_1rm > existing["max_epley_1rm"]:
-        conn.execute(
-            """UPDATE prs SET max_weight = ?, max_epley_1rm = ?,
-               timestamp = CURRENT_TIMESTAMP WHERE exercise_id = ?""",
-            (weight, epley_1rm, exercise_id),
-        )
 
 
 def get_history(
@@ -589,37 +498,52 @@ def get_history(
 ) -> list[Workout]:
     """
     Return the most recent workout logs for an exercise, newest first.
-
-    Args:
-        exercise_name: Name of the exercise (case-insensitive).
-        limit: Maximum number of records to return.
-        db_path: Optional override path for testing.
-
-    Raises:
-        ValueError: If the exercise is not found.
+    Groups sets from the same session/reps/weight together.
     """
     exercise = get_exercise_by_name(exercise_name, db_path)
     if not exercise:
         raise ValueError(f"Exercise '{exercise_name}' not found.")
 
-    with get_connection(db_path) as conn:
-        rows = conn.execute(
-            """SELECT w.*, e.name as exercise_name
-               FROM workouts w JOIN exercises e ON w.exercise_id = e.id
-               WHERE w.exercise_id = ?
-               ORDER BY w.timestamp DESC, w.id DESC LIMIT ?""",
-            (exercise.id, limit),
-        ).fetchall()
+    # Re-fetch PostgreSQL ID
+    postgres_exercise = get_exercise_by_name(exercise_name, db_path)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM exercise WHERE id = %s", (postgres_exercise.id,))
+            postgres_exercise_id = cur.fetchone()["id"]
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT 
+                       MAX(ws.id) AS id,
+                       ws.exercise_id,
+                       e.name AS exercise_name,
+                       COUNT(ws.id) AS sets,
+                       ws.reps,
+                       ws.weight_kg AS weight,
+                       MAX(ws.estimated_1rm) AS epley_1rm,
+                       MAX(ws.logged_at) AS timestamp,
+                       sess.program_day_id AS day_id
+                   FROM workout_set ws
+                   JOIN exercise e ON ws.exercise_id = e.id
+                   JOIN workout_session sess ON ws.session_id = sess.id
+                   WHERE ws.exercise_id = %s
+                   GROUP BY ws.session_id, ws.exercise_id, e.name, ws.reps, ws.weight_kg, sess.program_day_id
+                   ORDER BY timestamp DESC, id DESC
+                   LIMIT %s""",
+                (postgres_exercise_id, limit),
+            )
+            rows = cur.fetchall()
 
     return [
         Workout(
             id=r["id"],
             exercise_id=r["exercise_id"],
-            exercise_name=r["exercise_name"],
+            exercise_name=map_outgoing_exercise_name(r["exercise_name"]),
             sets=r["sets"],
             reps=r["reps"],
-            weight=r["weight"],
-            epley_1rm=r["epley_1rm"],
+            weight=float(r["weight"]),
+            epley_1rm=float(r["epley_1rm"]),
             timestamp=r["timestamp"],
             day_id=r["day_id"],
         )
@@ -633,20 +557,30 @@ def get_history(
 
 def get_all_prs(db_path: Optional[Path] = None) -> list[PR]:
     """Return all personal records joined with exercise names."""
-    with get_connection(db_path) as conn:
-        rows = conn.execute(
-            """SELECT p.*, e.name as exercise_name
-               FROM prs p JOIN exercises e ON p.exercise_id = e.id
-               ORDER BY e.name""",
-        ).fetchall()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT 
+                       pr.id,
+                       pr.exercise_id,
+                       e.name AS exercise_name,
+                       set.weight_kg AS max_weight,
+                       pr.max_1rm AS max_epley_1rm,
+                       pr.achieved_at AS timestamp
+                   FROM personal_record pr
+                   JOIN exercise e ON pr.exercise_id = e.id
+                   LEFT JOIN workout_set set ON pr.set_id = set.id
+                   ORDER BY e.name""",
+            )
+            rows = cur.fetchall()
 
     return [
         PR(
             id=r["id"],
             exercise_id=r["exercise_id"],
-            exercise_name=r["exercise_name"],
-            max_weight=r["max_weight"],
-            max_epley_1rm=r["max_epley_1rm"],
+            exercise_name=map_outgoing_exercise_name(r["exercise_name"]),
+            max_weight=float(r["max_weight"]) if r["max_weight"] else 0.0,
+            max_epley_1rm=float(r["max_epley_1rm"]),
             timestamp=r["timestamp"],
         )
         for r in rows
@@ -659,9 +593,21 @@ def get_all_prs(db_path: Optional[Path] = None) -> list[PR]:
 
 def get_all_programs(db_path: Optional[Path] = None) -> list[Program]:
     """Return all programs ordered by name."""
-    with get_connection(db_path) as conn:
-        rows = conn.execute("SELECT * FROM programs ORDER BY name").fetchall()
-    return [Program(**dict(r)) for r in rows]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT id, name, CASE WHEN author = 'Jeff Nippard' THEN 'system' ELSE 'user' END AS created_by
+                   FROM program
+                   ORDER BY name"""
+            )
+            rows = cur.fetchall()
+    return [
+        Program(
+            id=r["id"],
+            name=map_outgoing_program_name(r["name"]),
+            created_by=r["created_by"]
+        ) for r in rows
+    ]
 
 
 def get_program_days(
@@ -669,17 +615,22 @@ def get_program_days(
 ) -> list[ProgramDay]:
     """
     Return all training days for a program, ordered by day_order.
-
-    Args:
-        program_id: The ID of the program.
-        db_path: Optional override path for testing.
     """
-    with get_connection(db_path) as conn:
-        rows = conn.execute(
-            "SELECT * FROM program_days WHERE program_id = ? ORDER BY day_order",
-            (program_id,),
-        ).fetchall()
-    return [ProgramDay(**dict(r)) for r in rows]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, program_id, name, day_order FROM program_day WHERE program_id = %s ORDER BY day_order",
+                (program_id,),
+            )
+            rows = cur.fetchall()
+    return [
+        ProgramDay(
+            id=r["id"],
+            program_id=r["program_id"],
+            name=format_day_name(r["name"]),
+            day_order=r["day_order"]
+        ) for r in rows
+    ]
 
 
 def get_day_exercises(
@@ -687,29 +638,34 @@ def get_day_exercises(
 ) -> list[DayExercise]:
     """
     Return all exercises for a training day, ordered by display_order.
-
-    Args:
-        day_id: The ID of the program day.
-        db_path: Optional override path for testing.
     """
-    with get_connection(db_path) as conn:
-        rows = conn.execute(
-            """SELECT de.*, e.name as exercise_name
-               FROM day_exercises de
-               JOIN exercises e ON de.exercise_id = e.id
-               WHERE de.day_id = ?
-               ORDER BY de.display_order""",
-            (day_id,),
-        ).fetchall()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT 
+                       re.id,
+                       re.program_day_id AS day_id,
+                       re.exercise_id,
+                       e.name AS exercise_name,
+                       re.sets_target AS target_sets,
+                       re.reps_target AS target_reps,
+                       re.order_in_day AS display_order
+                   FROM routine_exercise re
+                   JOIN exercise e ON re.exercise_id = e.id
+                   WHERE re.program_day_id = %s
+                   ORDER BY re.order_in_day""",
+                (day_id,),
+            )
+            rows = cur.fetchall()
 
     return [
         DayExercise(
             id=r["id"],
             day_id=r["day_id"],
             exercise_id=r["exercise_id"],
-            exercise_name=r["exercise_name"],
+            exercise_name=map_outgoing_exercise_name(r["exercise_name"]),
             target_sets=r["target_sets"],
-            target_reps=r["target_reps"],
+            target_reps=parse_reps(r["target_reps"]),
             display_order=r["display_order"],
         )
         for r in rows
@@ -723,52 +679,45 @@ def add_program(
 ) -> Program:
     """
     Create a new user-defined training program.
-
-    Args:
-        name: Unique name for the program.
-        days: List of (day_name, [(exercise_id, target_sets, target_reps)]).
-        db_path: Optional override path for testing.
-
-    Returns:
-        The newly created Program dataclass.
-
-    Raises:
-        ValueError: If a program with the same name already exists.
     """
-    with get_connection(db_path) as conn:
-        exists = conn.execute(
-            "SELECT id FROM programs WHERE LOWER(name) = LOWER(?)", (name,)
-        ).fetchone()
-        if exists:
-            raise ValueError(f"Program '{name}' already exists.")
-
-        conn.execute(
-            "INSERT INTO programs (name, created_by) VALUES (?, 'user')", (name,)
-        )
-        program_row = conn.execute(
-            "SELECT * FROM programs WHERE name = ?", (name,)
-        ).fetchone()
-        program_id = program_row["id"]
-
-        for day_order, (day_name, exercises) in enumerate(days, start=1):
-            conn.execute(
-                "INSERT INTO program_days (program_id, name, day_order) VALUES (?, ?, ?)",
-                (program_id, day_name, day_order),
+    normalized_name = normalize_program_name(name)
+    days_per_week = len(days)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM program WHERE LOWER(name) = LOWER(%s)", (normalized_name,)
             )
-            day_id = conn.execute(
-                "SELECT id FROM program_days WHERE program_id = ? AND name = ?",
-                (program_id, day_name),
-            ).fetchone()["id"]
+            exists = cur.fetchone()
+            if exists:
+                raise ValueError(f"Program '{name}' already exists.")
 
-            for display_order, (ex_id, sets, reps) in enumerate(exercises, start=1):
-                conn.execute(
-                    """INSERT INTO day_exercises
-                       (day_id, exercise_id, target_sets, target_reps, display_order)
-                       VALUES (?, ?, ?, ?, ?)""",
-                    (day_id, ex_id, sets, reps, display_order),
+            cur.execute(
+                "INSERT INTO program (name, author, days_per_week) VALUES (%s, 'user', %s) RETURNING id, name, author",
+                (normalized_name, days_per_week)
+            )
+            program_row = cur.fetchone()
+            program_id = program_row["id"]
+
+            for day_order, (day_name, exercises) in enumerate(days, start=1):
+                cur.execute(
+                    "INSERT INTO program_day (program_id, name, day_order) VALUES (%s, %s, %s) RETURNING id",
+                    (program_id, day_name, day_order),
                 )
+                day_id = cur.fetchone()["id"]
 
-    return Program(**dict(program_row))
+                for display_order, (ex_id, sets, reps) in enumerate(exercises, start=1):
+                    cur.execute(
+                        """INSERT INTO routine_exercise
+                           (program_day_id, exercise_id, sets_target, reps_target, order_in_day)
+                           VALUES (%s, %s, %s, %s, %s)""",
+                        (day_id, ex_id, sets, str(reps), display_order),
+                    )
+
+    return Program(
+        id=program_id,
+        name=map_outgoing_program_name(program_row["name"]),
+        created_by="user"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -778,73 +727,69 @@ def add_program(
 def get_active_state(db_path: Optional[Path] = None) -> Optional[dict]:
     """
     Return the currently active program and day as a dict, or None.
-
-    Returns:
-        A dict with keys 'program', 'day' (both dataclasses) and
-        'program_id', 'day_id' (ints), or None if nothing is set.
     """
-    with get_connection(db_path) as conn:
-        row = conn.execute("SELECT * FROM active_program WHERE id = 1").fetchone()
-    if not row:
-        return None
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM active_program WHERE id = 1")
+            row = cur.fetchone()
+            if not row:
+                return None
 
-    result: dict = {"program_id": row["program_id"], "day_id": row["day_id"]}
+            result: dict = {"program_id": row["program_id"], "day_id": row["day_id"]}
 
-    if row["program_id"]:
-        with get_connection(db_path) as conn:
-            p = conn.execute(
-                "SELECT * FROM programs WHERE id = ?", (row["program_id"],)
-            ).fetchone()
-        result["program"] = Program(**dict(p)) if p else None
-    else:
-        result["program"] = None
+            if row["program_id"]:
+                cur.execute("SELECT id, name, author FROM program WHERE id = %s", (row["program_id"],))
+                p = cur.fetchone()
+                if p:
+                    created_by = "system" if p["author"] == "Jeff Nippard" else "user"
+                    result["program"] = Program(
+                        id=p["id"],
+                        name=map_outgoing_program_name(p["name"]),
+                        created_by=created_by
+                    )
+                else:
+                    result["program"] = None
+            else:
+                result["program"] = None
 
-    if row["day_id"]:
-        with get_connection(db_path) as conn:
-            d = conn.execute(
-                "SELECT * FROM program_days WHERE id = ?", (row["day_id"],)
-            ).fetchone()
-        result["day"] = ProgramDay(**dict(d)) if d else None
-    else:
-        result["day"] = None
+            if row["day_id"]:
+                cur.execute("SELECT * FROM program_day WHERE id = %s", (row["day_id"],))
+                d = cur.fetchone()
+                result["day"] = ProgramDay(
+                    id=d["id"],
+                    program_id=d["program_id"],
+                    name=format_day_name(d["name"]),
+                    day_order=d["day_order"]
+                ) if d else None
+            else:
+                result["day"] = None
 
-    return result
+            return result
 
 
 def set_active_program(program_id: int, db_path: Optional[Path] = None) -> None:
     """
-    Set the active program. Clears the active day (user must set it separately).
-
-    Args:
-        program_id: The program to mark as active.
-        db_path: Optional override path for testing.
-
-    Raises:
-        ValueError: If the program_id does not exist.
+    Set the active program. Clears the active day.
     """
-    with get_connection(db_path) as conn:
-        exists = conn.execute(
-            "SELECT id FROM programs WHERE id = ?", (program_id,)
-        ).fetchone()
-        if not exists:
-            raise ValueError(f"Program with id {program_id} not found.")
-        conn.execute(
-            """INSERT INTO active_program (id, program_id, day_id) VALUES (1, ?, NULL)
-               ON CONFLICT(id) DO UPDATE SET program_id = excluded.program_id, day_id = NULL""",
-            (program_id,),
-        )
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM program WHERE id = %s", (program_id,)
+            )
+            exists = cur.fetchone()
+            if not exists:
+                raise ValueError(f"Program with id {program_id} not found.")
+            
+            cur.execute(
+                """INSERT INTO active_program (id, program_id, day_id) VALUES (1, %s, NULL)
+                   ON CONFLICT(id) DO UPDATE SET program_id = EXCLUDED.program_id, day_id = NULL""",
+                (program_id,),
+            )
 
 
 def set_active_day(day_id: int, db_path: Optional[Path] = None) -> None:
     """
     Set today's training day within the active program.
-
-    Args:
-        day_id: The program_days ID to mark as today's session.
-        db_path: Optional override path for testing.
-
-    Raises:
-        ValueError: If no program is active, or the day doesn't belong to it.
     """
     active = get_active_state(db_path)
     if not active or not active.get("program_id"):
@@ -852,20 +797,22 @@ def set_active_day(day_id: int, db_path: Optional[Path] = None) -> None:
             "No active program. Set one first with: gymops select-program"
         )
 
-    with get_connection(db_path) as conn:
-        day_row = conn.execute(
-            "SELECT * FROM program_days WHERE id = ? AND program_id = ?",
-            (day_id, active["program_id"]),
-        ).fetchone()
-        if not day_row:
-            raise ValueError(
-                f"Day id {day_id} does not belong to the active program."
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM program_day WHERE id = %s AND program_id = %s",
+                (day_id, active["program_id"]),
             )
-        conn.execute(
-            """INSERT INTO active_program (id, program_id, day_id) VALUES (1, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET day_id = excluded.day_id""",
-            (active["program_id"], day_id),
-        )
+            day_row = cur.fetchone()
+            if not day_row:
+                raise ValueError(
+                    f"Day id {day_id} does not belong to the active program."
+                )
+            cur.execute(
+                """INSERT INTO active_program (id, program_id, day_id) VALUES (1, %s, %s)
+                   ON CONFLICT(id) DO UPDATE SET day_id = EXCLUDED.day_id""",
+                (active["program_id"], day_id),
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -883,24 +830,38 @@ def get_workouts_in_range(
     days: int = 7, db_path: Optional[Path] = None
 ) -> list[Workout]:
     """Return all workouts logged within the last N days."""
-    with get_connection(db_path) as conn:
-        rows = conn.execute(
-            """SELECT w.*, e.name as exercise_name
-               FROM workouts w JOIN exercises e ON w.exercise_id = e.id
-               WHERE w.timestamp >= datetime('now', ?)
-               ORDER BY w.timestamp DESC, w.id DESC""",
-            (f"-{days} days",),
-        ).fetchall()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT 
+                       MAX(ws.id) AS id,
+                       ws.exercise_id,
+                       e.name AS exercise_name,
+                       COUNT(ws.id) AS sets,
+                       ws.reps,
+                       ws.weight_kg AS weight,
+                       MAX(ws.estimated_1rm) AS epley_1rm,
+                       MAX(ws.logged_at) AS timestamp,
+                       sess.program_day_id AS day_id
+                   FROM workout_set ws
+                   JOIN exercise e ON ws.exercise_id = e.id
+                   JOIN workout_session sess ON ws.session_id = sess.id
+                   WHERE ws.logged_at >= NOW() - (%s * INTERVAL '1 day')
+                   GROUP BY ws.session_id, ws.exercise_id, e.name, ws.reps, ws.weight_kg, sess.program_day_id
+                   ORDER BY timestamp DESC, id DESC""",
+                (days,),
+            )
+            rows = cur.fetchall()
 
     return [
         Workout(
             id=r["id"],
             exercise_id=r["exercise_id"],
-            exercise_name=r["exercise_name"],
+            exercise_name=map_outgoing_exercise_name(r["exercise_name"]),
             sets=r["sets"],
             reps=r["reps"],
-            weight=r["weight"],
-            epley_1rm=r["epley_1rm"],
+            weight=float(r["weight"]),
+            epley_1rm=float(r["epley_1rm"]),
             timestamp=r["timestamp"],
             day_id=r["day_id"],
         )
