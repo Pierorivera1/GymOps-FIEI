@@ -1,171 +1,171 @@
 # GymOps 🏋️
 
-> A terminal-based workout tracker — and a Base de Datos II final project at FIEI/UNI.
+> Una herramienta de seguimiento de entrenamiento para la terminal — y proyecto final de Base de Datos II en FIEI/UNI.
 
-GymOps is a CLI tool that lives in your terminal. You set your training split, pick today's day, and log your sets. It tracks your personal records, tells you if you're actually getting stronger, and generates a weekly summary of what you've been doing.
+GymOps es una herramienta CLI que vive en tu terminal. Configuras tu split de entrenamiento, eliges el día de hoy y registras tus series. Lleva el seguimiento de tus récords personales, te indica si realmente estás progresando, y genera un resumen semanal de tu actividad.
 
-Inspired by [lazygit](https://github.com/jesseduffield/lazygit) — the idea that a good terminal tool should get out of your way, run locally, and just work.
-
----
-
-## Features
-
-- **PostgreSQL Backend**: Full relational database with stored procedures, views, triggers, and indexes.
-- **Pre-loaded Splits**: Comes pre-seeded with Jeff Nippard's classic splits (Upper/Lower 4-Day, ULPPL 5-Day, PPL 6-Day).
-- **Estimated 1RM**: Calculates estimated 1-rep max using the Epley formula after every set.
-- **Progressive Overload Stats**: Compares today's performance against your last session.
-- **PR Tracking**: Auto-updates your personal records and marks them when broken.
-- **Weekly Digests**: Generates markdown summaries of your weekly training volume and best lifts.
-- **Bilingual CLI**: Switch between English and Español with `gymops set-language`.
-- **TUI Interface (Coming Soon)**: A full lazygit-style terminal UI to log sets and view PRs visually.
+Inspirado en [lazygit](https://github.com/jesseduffield/lazygit) — la idea de que una buena herramienta de terminal no debe estorbarte, funcionar localmente y simplemente hacer su trabajo.
 
 ---
 
-## Quickstart
+## Características
 
-### Prerequisites
+- **Backend PostgreSQL**: Base de datos relacional completa con procedimientos almacenados, vistas, triggers e índices.
+- **Splits preconfigurados**: Viene precargado con los splits clásicos de Jeff Nippard (Upper/Lower 4 días, ULPPL 5 días, PPL 6 días).
+- **1RM estimado**: Calcula el máximo estimado de una repetición usando la fórmula de Epley después de cada serie.
+- **Estadísticas de sobrecarga progresiva**: Compara el rendimiento de hoy contra tu última sesión.
+- **Seguimiento de PRs**: Actualiza automáticamente tus récords personales y los marca cuando se superan.
+- **Resúmenes semanales**: Genera resúmenes en Markdown del volumen semanal de entrenamiento y mejores levantamientos.
+- **CLI bilingüe**: Cambia entre inglés y español con `gymops set-language`.
+- **Interfaz TUI (Próximamente)**: Una interfaz de terminal al estilo lazygit para registrar series y ver PRs visualmente.
+
+---
+
+## Inicio rápido
+
+### Requisitos previos
 - Python 3.12+
 - [uv](https://github.com/astral-sh/uv)
-- Docker (for PostgreSQL)
+- Docker (para PostgreSQL)
 
-### Setup
+### Configuración
 
 ```bash
-# Clone the repository
+# Clonar el repositorio
 git clone https://github.com/Pierorivera1/GymOps-FIEI.git
 cd GymOps-FIEI
 
-# Start PostgreSQL with Docker
+# Iniciar PostgreSQL con Docker
 docker run --name gymops-db -e POSTGRES_USER=gymops \
   -e POSTGRES_PASSWORD=gymops_pass \
   -e POSTGRES_DB=gymops_db \
   -p 5432:5432 -d postgres:16
 
-# Create virtual environment and install dependencies
+# Crear entorno virtual e instalar dependencias
 uv venv
 source .venv/bin/activate
 uv pip install -e .
 
-# Initialize the database (run SQL scripts in order)
+# Inicializar la base de datos (ejecutar los scripts SQL en orden)
 psql -h localhost -U gymops -d gymops_db -f proyecto_bdII/sql/01_ddl.sql
 psql -h localhost -U gymops -d gymops_db -f proyecto_bdII/sql/02_seed.sql
 
-# Confirm it works
+# Verificar que funciona
 gymops --help
 ```
 
 ---
 
-## Usage
+## Uso
 
 ```bash
-# Set your preferred language (en / es)
+# Establecer el idioma preferido (en / es)
 gymops set-language es
 
-# 1. List all available training programs
+# 1. Listar todos los programas de entrenamiento disponibles
 gymops list-programs
 
-# 2. Select the active program you follow
+# 2. Seleccionar el programa activo que sigues
 gymops select-program "Upper/Lower 4-Day"
 
-# 3. Set today's training day (do this at the start of your workout)
+# 3. Establecer el día de entrenamiento de hoy (hacerlo al inicio del entrenamiento)
 gymops set-day "Upper A — Strength"
 
-# 4. Log your sets as you perform them
+# 4. Registrar tus series mientras las realizas
 gymops log --exercise "Barbell Bench Press" --sets 4 --reps 5 --weight 80
 
-# 5. Check progressive overload vs last session
+# 5. Revisar la sobrecarga progresiva vs la última sesión
 gymops stats --exercise "Barbell Bench Press"
 
-# 6. View your personal records
+# 6. Ver tus récords personales
 gymops prs
 
-# 7. View exercise history
+# 7. Ver el historial de un ejercicio
 gymops history --exercise "Barbell Bench Press"
 
-# 8. Add an exercise to the catalog
+# 8. Agregar un ejercicio al catálogo
 gymops add-exercise --name "Dumbbell Lateral Raise" --muscle-group "Shoulders" --type isolation
 
-# 9. Create a custom training program
+# 9. Crear un programa de entrenamiento personalizado
 gymops add-program
 
-# 10. Generate a weekly Markdown digest
+# 10. Generar un resumen semanal en Markdown
 gymops digest
 ```
 
 ---
 
-## Database
+## Base de datos
 
-GymOps runs on **PostgreSQL 16** (Docker). The schema includes:
+GymOps corre sobre **PostgreSQL 16** (Docker). El esquema incluye:
 
-| Object | Count | Description |
-|--------|-------|-------------|
-| Tables | 9 | Core relational schema (3NF) |
-| Views | 9 | Reports, security, progress tracking |
-| Indexes | 15 | B-tree, partial, expression indexes |
-| Stored Procedures | — | Coming in Phase 5 |
-| Functions (UDF) | — | Coming in Phase 6 |
-| Triggers | — | Coming in Phase 7 |
+| Objeto | Cantidad | Descripción |
+|--------|----------|-------------|
+| Tablas | 9 | Esquema relacional principal (3FN) |
+| Vistas | 9 | Reportes, seguridad y seguimiento de progreso |
+| Índices | 15 | Índices B-tree, parciales y de expresión |
+| Procedimientos almacenados | — | Próximamente en la Fase 5 |
+| Funciones (UDF) | — | Próximamente en la Fase 6 |
+| Triggers | — | Próximamente en la Fase 7 |
 
-### SQL Scripts (`proyecto_bdII/sql/`)
+### Scripts SQL (`proyecto_bdII/sql/`)
 
-| Script | Purpose |
-|--------|---------|
-| `01_ddl.sql` | Schema: tables, PKs, FKs, CHECKs |
-| `02_seed.sql` | Seed: muscles, 51 exercises, 3 programs |
-| `03_dml.sql` | DML: sessions, sets, UPDATE/DELETE examples |
-| `04_queries.sql` | 10 advanced queries (CTE, window functions) |
-| `05_views.sql` | 9 views for reports and security |
-| `06_indexes.sql` | 15 indexes + EXPLAIN ANALYZE plans |
+| Script | Propósito |
+|--------|-----------|
+| `01_ddl.sql` | Esquema: tablas, PKs, FKs, CHECKs |
+| `02_seed.sql` | Datos iniciales: músculos, 51 ejercicios, 3 programas |
+| `03_dml.sql` | DML: sesiones, series, ejemplos de UPDATE/DELETE |
+| `04_queries.sql` | 10 consultas avanzadas (CTE, funciones de ventana) |
+| `05_views.sql` | 9 vistas para reportes y seguridad |
+| `06_indexes.sql` | 15 índices + planes EXPLAIN ANALYZE |
 
-### Connection
+### Conexión
 
 ```
 Host:     localhost
-Port:     5432
-Database: gymops_db
-User:     gymops
-Password: gymops_pass
+Puerto:   5432
+Base de datos: gymops_db
+Usuario:  gymops
+Contraseña: gymops_pass
 ```
 
 ---
 
-## Project Structure
+## Estructura del proyecto
 
 ```
 GymOps-FIEI/
 ├── gymops/
-│   ├── cli.py          # All Typer CLI commands
-│   ├── db.py           # Database layer (SQLite → PostgreSQL migration)
-│   ├── i18n.py         # Internationalisation (en / es)
+│   ├── cli.py          # Todos los comandos Typer del CLI
+│   ├── db.py           # Capa de base de datos (migración SQLite → PostgreSQL)
+│   ├── i18n.py         # Internacionalización (en / es)
 │   ├── models.py       # Dataclasses: Workout, Exercise, PR, Routine
-│   └── report.py       # Weekly digest generator
+│   └── report.py       # Generador de resúmenes semanales
 ├── proyecto_bdII/
-│   ├── DESCRIPCION_PROYECTO.md   # Full project description (BD II)
-│   ├── PLANNING.md               # Phase tracker and implementation plan
-│   └── sql/                      # All SQL scripts (phases 1–7)
-└── tests/              # pytest test suite
+│   ├── DESCRIPCION_PROYECTO.md   # Descripción completa del proyecto (BD II)
+│   ├── PLANNING.md               # Seguimiento de fases y plan de implementación
+│   └── sql/                      # Todos los scripts SQL (fases 1–7)
+└── tests/              # Suite de pruebas con pytest
 ```
 
 ---
 
-## Development & Tests
+## Desarrollo y pruebas
 
 ```bash
-# Install test requirements
+# Instalar requisitos de prueba
 uv pip install pytest
 
-# Run tests
+# Ejecutar pruebas
 uv run pytest
 ```
 
 ---
 
-## BD II — Course Project
+## BD II — Proyecto de curso
 
-This repo doubles as a **Base de Datos II final project** at FIEI/UNI.
-See [`proyecto_bdII/PLANNING.md`](proyecto_bdII/PLANNING.md) for the full implementation roadmap
-and [`proyecto_bdII/DESCRIPCION_PROYECTO.md`](proyecto_bdII/DESCRIPCION_PROYECTO.md) for the project description.
+Este repositorio también funciona como **proyecto final de Base de Datos II** en FIEI/UNI.
+Consulta [`proyecto_bdII/PLANNING.md`](proyecto_bdII/PLANNING.md) para el roadmap completo de implementación
+y [`proyecto_bdII/DESCRIPCION_PROYECTO.md`](proyecto_bdII/DESCRIPCION_PROYECTO.md) para la descripción del proyecto.
 
 **Stack**: PostgreSQL 16 · Python 3.12 · Docker · Typer · Rich
