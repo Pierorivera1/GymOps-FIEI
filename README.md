@@ -1,6 +1,6 @@
 # GymOps 🏋️
 
-> Una herramienta de seguimiento de entrenamiento para la terminal — y proyecto final de Base de Datos II en FIEI/UNI.
+> Una herramienta de seguimiento de entrenamiento para la terminal — y proyecto final de Base de Datos II en FIEI.
 
 GymOps es una herramienta CLI que vive en tu terminal. Configuras tu split de entrenamiento, eliges el día de hoy y registras tus series. Lleva el seguimiento de tus récords personales, te indica si realmente estás progresando, y genera un resumen semanal de tu actividad.
 
