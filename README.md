@@ -2,19 +2,31 @@
 
 > Una herramienta de seguimiento de entrenamiento para la terminal — y proyecto final de Base de Datos II en FIEI.
 
-GymOps es una herramienta CLI que vive en tu terminal. Configuras tu split de entrenamiento, eliges el día de hoy y registras tus series. Lleva el seguimiento de tus récords personales, te indica si realmente estás progresando, y genera un resumen semanal de tu actividad.
+GymOps está pensado para personas que **están comenzando en el gimnasio y no saben por dónde empezar**. La aplicación les ofrece rutinas ya armadas por expertos (como los splits de Jeff Nippard) para que solo tengan que seguirlas, registrar sus series y ver cómo progresan con el tiempo. Para quienes ya tienen experiencia, también permite crear y gestionar sus propios programas personalizados.
 
-Inspirado en [lazygit](https://github.com/jesseduffield/lazygit) — la idea de que una buena herramienta de terminal no debe estorbarte, funcionar localmente y simplemente hacer su trabajo.
+Todo funciona desde la terminal: sin apps en la nube, sin cuentas, sin distracciones. Inspirado en [lazygit](https://github.com/jesseduffield/lazygit) — la idea de que una buena herramienta de terminal no debe estorbarte, funcionar localmente y simplemente hacer su trabajo.
+
+---
+
+## ¿Para quién es GymOps?
+
+| Perfil | Cómo lo ayuda GymOps |
+|--------|----------------------|
+| 🔰 **Sin experiencia** | Viene con rutinas listas de Jeff Nippard. Solo elige la tuya y empieza a registrar. |
+| 📈 **Intermedio** | Lleva el seguimiento de tus cargas, detecta si estás progresando y rompe tus PRs. |
+| ⚙️ **Avanzado** | Crea tus propios programas y rutinas personalizadas desde la CLI. |
 
 ---
 
 ## Características
 
+- **Rutinas listas para usar**: Viene precargado con splits de Jeff Nippard (Upper/Lower 4 días, ULPPL 5 días, PPL 6 días). Ideal para quienes no saben qué rutina hacer.
+- **Programas personalizados**: Crea tus propios programas y días de entrenamiento desde la CLI.
 - **Backend PostgreSQL**: Base de datos relacional completa con procedimientos almacenados, vistas, triggers e índices.
-- **Splits preconfigurados**: Viene precargado con los splits clásicos de Jeff Nippard (Upper/Lower 4 días, ULPPL 5 días, PPL 6 días).
 - **1RM estimado**: Calcula el máximo estimado de una repetición usando la fórmula de Epley después de cada serie.
-- **Estadísticas de sobrecarga progresiva**: Compara el rendimiento de hoy contra tu última sesión.
-- **Seguimiento de PRs**: Actualiza automáticamente tus récords personales y los marca cuando se superan.
+- **Estadísticas de sobrecarga progresiva**: Compara el rendimiento de hoy contra tu última sesión para saber si estás mejorando.
+- **Seguimiento de PRs**: Detecta y registra tus récords personales automáticamente.
+- **Auditoría automática**: Todo cambio en sets y PRs queda registrado en un log de auditoría.
 - **Resúmenes semanales**: Genera resúmenes en Markdown del volumen semanal de entrenamiento y mejores levantamientos.
 - **CLI bilingüe**: Cambia entre inglés y español con `gymops set-language`.
 - **Interfaz TUI (Próximamente)**: Una interfaz de terminal al estilo lazygit para registrar series y ver PRs visualmente.
@@ -65,7 +77,7 @@ gymops set-language es
 # 1. Listar todos los programas de entrenamiento disponibles
 gymops list-programs
 
-# 2. Seleccionar el programa activo que sigues
+# 2. Seleccionar el programa activo que seguirás
 gymops select-program "Upper/Lower 4-Day"
 
 # 3. Establecer el día de entrenamiento de hoy (hacerlo al inicio del entrenamiento)
@@ -104,30 +116,95 @@ GymOps corre sobre **PostgreSQL 16** (Docker). El esquema incluye:
 | Tablas | 9 | Esquema relacional principal (3FN) |
 | Vistas | 9 | Reportes, seguridad y seguimiento de progreso |
 | Índices | 15 | Índices B-tree, parciales y de expresión |
-| Procedimientos almacenados | — | Próximamente en la Fase 5 |
-| Funciones (UDF) | — | Próximamente en la Fase 6 |
-| Triggers | — | Próximamente en la Fase 7 |
+| Procedimientos almacenados | 5 | Gestión de sesiones, log de sets, detección de PRs |
+| Funciones (UDF) | 6 | Fórmula Epley, volumen, historial por ejercicio |
+| Triggers | 6 | Cálculo automático de 1RM, auditoría, validaciones |
 
 ### Scripts SQL (`proyecto_bdII/sql/`)
 
 | Script | Propósito |
 |--------|-----------|
 | `01_ddl.sql` | Esquema: tablas, PKs, FKs, CHECKs |
-| `02_seed.sql` | Datos iniciales: músculos, 51 ejercicios, 3 programas |
+| `02_seed.sql` | Datos iniciales: músculos, 51 ejercicios, 3 programas Jeff Nippard |
 | `03_dml.sql` | DML: sesiones, series, ejemplos de UPDATE/DELETE |
-| `04_queries.sql` | 10 consultas avanzadas (CTE, funciones de ventana) |
+| `04_queries.sql` | 10 consultas avanzadas (CTE, funciones de ventana, RANK, LAG) |
 | `05_views.sql` | 9 vistas para reportes y seguridad |
 | `06_indexes.sql` | 15 índices + planes EXPLAIN ANALYZE |
+| `07_procedures.sql` | 5 procedimientos almacenados en PL/pgSQL |
+| `08_functions.sql` | 6 funciones escalares y tipo tabla |
+| `09_triggers.sql` | 6 triggers de auditoría, cálculo automático y validación |
+
+### Modelo de datos (entidades principales)
+
+| Entidad | Descripción |
+|---------|-------------|
+| `muscle_group` | Grupos musculares (pecho, espalda, piernas, hombros, etc.) |
+| `exercise` | Catálogo maestro de ejercicios (nombre, músculo, tipo, equipamiento) |
+| `program` | Programa de entrenamiento (ej: "Upper/Lower 4-Day Jeff Nippard") |
+| `program_day` | Día dentro de un programa (ej: "Upper A — Strength") |
+| `routine_exercise` | Ejercicios asignados a un día de programa (con series y reps objetivo) |
+| `workout_session` | Sesión de entrenamiento realizada (fecha, programa y día) |
+| `workout_set` | Set individual registrado (ejercicio, reps, peso, 1RM calculado) |
+| `personal_record` | Récord personal por ejercicio (máximo 1RM histórico) |
+| `audit_log` | Registro de auditoría de cambios en sets y PRs |
 
 ### Conexión
 
 ```
-Host:     localhost
-Puerto:   5432
+Host:          localhost
+Puerto:        5432
 Base de datos: gymops_db
-Usuario:  gymops
-Contraseña: gymops_pass
+Usuario:       gymops
+Contraseña:    gymops_pass
 ```
+
+---
+
+## Requerimientos
+
+### Funcionales
+
+| ID | Requerimiento |
+|----|---------------|
+| RF-01 | Registrar ejercicios con nombre, grupo muscular, tipo y equipamiento |
+| RF-02 | Crear y gestionar programas de entrenamiento con días y ejercicios asignados |
+| RF-03 | Iniciar y cerrar sesiones de entrenamiento |
+| RF-04 | Registrar sets (ejercicio, series, reps, peso) dentro de una sesión |
+| RF-05 | Calcular automáticamente el 1RM estimado por cada set (fórmula Epley) |
+| RF-06 | Detectar y registrar récords personales automáticamente |
+| RF-07 | Mostrar estadísticas de progreso comparando sesiones pasadas vs actuales |
+| RF-08 | Generar reportes semanales de volumen y mejores levantamientos |
+| RF-09 | Consultar el historial de cualquier ejercicio |
+| RF-10 | Registrar un log de auditoría de cambios en sets y PRs |
+
+### No Funcionales
+
+| ID | Requerimiento |
+|----|---------------|
+| RNF-01 | **Rendimiento:** Consultas frecuentes (historial, PRs) en < 100ms con índices |
+| RNF-02 | **Integridad:** Todas las relaciones con FK y ON DELETE apropiado |
+| RNF-03 | **Disponibilidad:** BD en Docker disponible localmente en todo momento |
+| RNF-04 | **Usabilidad:** Salida formateada con Rich tables para todas las consultas |
+| RNF-05 | **Mantenibilidad:** Todo el código SQL comentado y organizado por archivo |
+| RNF-06 | **Portabilidad:** Scripts SQL compatibles con PostgreSQL 14+ |
+| RNF-07 | **Trazabilidad:** Todo cambio en `workout_set` y `personal_record` auditado |
+
+---
+
+## Alcance
+
+**Incluido en esta versión:**
+- Módulo de gestión de ejercicios (catálogo por músculo y tipo)
+- Módulo de programas de entrenamiento (splits, días, rutinas predefinidas y personalizadas)
+- Módulo de sesiones de entrenamiento (log de sets por sesión)
+- Módulo de análisis de progreso (1RM estimado, sobrecarga progresiva, PRs)
+- Módulo de reportes (resúmenes semanales, estadísticas por ejercicio)
+- Implementación SQL completa: DDL, DML, vistas, índices, SPs, funciones, triggers
+
+**Fuera de alcance en esta versión:**
+- Módulo de Administración y Seguridad (gestión de usuarios/roles de BD, backups automáticos, GRANT/REVOKE)
+- Interfaz web o móvil (la aplicación es CLI/TUI)
+- Sincronización en la nube
 
 ---
 
