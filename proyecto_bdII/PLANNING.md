@@ -1,5 +1,5 @@
 # GymOps — Planning del Proyecto Final BD II
-### Base de Datos II — Universidad Nacional de Ingeniería (FIEI)
+### Base de Datos II — Universidad Nacional Federico Villarreal (UNFV)
 **Autor:** Piero Rivera  
 **Gestor:** PostgreSQL 16 (Docker)  
 **Estado:** 🟢 SQL Completo (Fases 1–7 finalizadas)
@@ -24,9 +24,9 @@ Todo lo demás del formato sí está contemplado y se detalla a continuación.
 | Sección del Formato | Equivalente en GymOps | Estado |
 |--------------------|-----------------------|--------|
 | 2.1 Análisis y propuesta | `DESCRIPCION_PROYECTO.md` | ✅ Completo |
-| 2.2 Modelamiento de procesos | Diagramas BPMN, flujo, casos de uso | 🔲 Pendiente |
+| 2.2 Modelamiento de procesos | Diagramas BPMN, flujo, casos de uso | ✅ Completo |
 | 2.3 Requerimientos funcionales/no funcionales | Listado en PLANNING (ver §3) | ✅ Completo |
-| 2.4 Modelo de BD | Conceptual, lógico, físico | 🔲 Pendiente |
+| 2.4 Modelo de BD | Conceptual, lógico, físico | ✅ Completo |
 | 2.5 Script de implementación | `sql/01_ddl.sql`, `sql/02_seed.sql` | ✅ Completo |
 | 3.1 Manipulación de datos | `sql/03_dml.sql` | ✅ Completo |
 | 3.2 Consultas avanzadas | `sql/04_queries.sql` | ✅ Completo |
@@ -241,7 +241,7 @@ audit_log (id, table_name, operation, old_data, new_data, changed_at)
 |-----------|------------------|--------|
 | Documento del proyecto | `DESCRIPCION_PROYECTO.md` | ✅ |
 | Planning | `PLANNING.md` (este archivo) | ✅ |
-| Diagramas | `diagramas/` | 🔲 |
+| Diagramas | `diagramas/` | ✅ |
 | Scripts SQL (DDL a Triggers) | `sql/01` al `sql/09` | ✅ |
 | Código fuente app | `gymops/` (root del repo) | ✅ |
 | Manual básico | `docs/manual_usuario.md` | 🔲 |

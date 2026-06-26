@@ -88,3 +88,14 @@ class DayExercise:
     target_sets: int
     target_reps: int
     display_order: int
+
+
+@dataclass
+class GuideArticle:
+    """Represents a fitness guide or informative article."""
+
+    id: int
+    title: str
+    slug: str
+    category: str
+    content_md: str

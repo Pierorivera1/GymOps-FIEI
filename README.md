@@ -1,8 +1,19 @@
-# GymOps 🏋️
+# GymOps-FIEI 🏋️
 
-> Una herramienta de seguimiento de entrenamiento para la terminal — y proyecto final de Base de Datos II en FIEI.
+> Una herramienta de seguimiento de entrenamiento para la terminal y proyecto final de **Base de Datos II** en la **UNFV (Facultad de Ingeniería Electrónica e Informática - FIEI)**.
 
-GymOps está pensado para personas que **están comenzando en el gimnasio y no saben por dónde empezar**. La aplicación les ofrece rutinas ya armadas por expertos para que solo tengan que seguirlas, registrar sus series y ver cómo progresan con el tiempo. Para quienes ya tienen experiencia, también permite crear y gestionar sus propios programas personalizados.
+Este repositorio [GymOps-FIEI](https://github.com/Pierorivera1/GymOps-FIEI) es una adaptación y fork informal del proyecto original GymOps. A diferencia de la versión original (enfocada en DevOps, infraestructura Azure y pipelines de CI/CD), **esta versión ha sido modificada y expandida específicamente para el ámbito de Bases de Datos**, migrando completamente a PostgreSQL y aplicando los conocimientos avanzados del curso de Base de Datos II. Por ende, características de DevOps como despliegues en Azure (`azure_deployment`), flujos de GitHub Actions (`github_actions`) y ejecución automatizada de tests no forman parte del flujo de este proyecto (las pruebas solo se ejecutan cuando se solicita explícitamente).
+
+### ¿A quién va dirigido?
+GymOps está diseñado principalmente para:
+- **Estudiantes de Ingeniería Informática** y entusiastas de la tecnología familiarizados con la terminal. El uso de interfaces CLI/TUI es ideal por su compatibilidad con agentes de Inteligencia Artificial que pueden interactuar directamente con la terminal para automatizar tareas.
+- **Principiantes y entusiastas del fitness** que desean comenzar a entrenar fuerza en el gimnasio o mediante otras modalidades. Ofrece la flexibilidad de registrar manualmente cualquier ejercicio (haciéndolo útil incluso para calistenia u otras disciplinas).
+
+### Entrena con Ciencia
+El sistema recopila información y principios de entrenamiento basados en la ciencia (de divulgadores reconocidos como *Jeff Nippard*). GymOps viene con rutinas pre-agregadas científicamente estructuradas. El usuario puede:
+1. Revisar las rutinas disponibles.
+2. Seleccionar la que mejor se adapte a su disponibilidad de tiempo y preferencias.
+3. Seguir de forma guiada los ejercicios, series y repeticiones recomendados para optimizar sus resultados.
 
 Todo funciona desde la terminal: sin apps en la nube, sin cuentas, sin distracciones. Inspirado en [lazygit](https://github.com/jesseduffield/lazygit) — la idea de que una buena herramienta de terminal no debe estorbarte, funcionar localmente y simplemente hacer su trabajo.
 
@@ -29,7 +40,6 @@ Todo funciona desde la terminal: sin apps en la nube, sin cuentas, sin distracci
 - **Auditoría automática**: Todo cambio en sets y PRs queda registrado en un log de auditoría.
 - **Resúmenes semanales**: Genera resúmenes en Markdown del volumen semanal de entrenamiento y mejores levantamientos.
 - **CLI bilingüe**: Cambia entre inglés y español con `gymops set-language`.
-- **Interfaz TUI (Próximamente)**: Una interfaz de terminal al estilo lazygit para registrar series y ver PRs visualmente.
 
 ---
 
@@ -214,7 +224,7 @@ Contraseña:    gymops_pass
 GymOps-FIEI/
 ├── gymops/
 │   ├── cli.py          # Todos los comandos Typer del CLI
-│   ├── db.py           # Capa de base de datos (migración SQLite → PostgreSQL)
+│   ├── db.py           # Capa de base de datos (PostgreSQL)
 │   ├── i18n.py         # Internacionalización (en / es)
 │   ├── models.py       # Dataclasses: Workout, Exercise, PR, Routine
 │   └── report.py       # Generador de resúmenes semanales
@@ -229,11 +239,14 @@ GymOps-FIEI/
 
 ## Desarrollo y pruebas
 
+> [!NOTE]
+> Dado que esta versión está enfocada en el desarrollo de la Base de Datos, las pruebas unitarias e integración no son parte del flujo regular de trabajo y solo deben ejecutarse de manera explícita si se requiere validar el comportamiento CLI.
+
 ```bash
 # Instalar requisitos de prueba
 uv pip install pytest
 
-# Ejecutar pruebas
+# Ejecutar pruebas (solo bajo demanda explícita)
 uv run pytest
 ```
 
@@ -241,7 +254,7 @@ uv run pytest
 
 ## BD II — Proyecto de curso
 
-Este repositorio también funciona como **proyecto final de Base de Datos II** en FIEI/UNI.
+Este repositorio también funciona como **proyecto final de Base de Datos II** en la UNFV.
 Consulta [`proyecto_bdII/PLANNING.md`](proyecto_bdII/PLANNING.md) para el roadmap completo de implementación
 y [`proyecto_bdII/DESCRIPCION_PROYECTO.md`](proyecto_bdII/DESCRIPCION_PROYECTO.md) para la descripción del proyecto.
 

@@ -161,6 +161,21 @@ COMMENT ON COLUMN audit_log.old_data    IS 'Estado anterior del registro (NULL e
 COMMENT ON COLUMN audit_log.new_data    IS 'Estado nuevo del registro (NULL en DELETE)';
 
 -- =============================================================================
+-- 10. GUIDE_ARTICLE — Artículos informativos y guías de fitness
+-- =============================================================================
+CREATE TABLE guide_article (
+    id          SERIAL PRIMARY KEY,
+    title       VARCHAR(150) UNIQUE NOT NULL,
+    slug        VARCHAR(100) UNIQUE NOT NULL,
+    category    VARCHAR(50) NOT NULL,
+    content_md  TEXT NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE  guide_article            IS 'Guías y artículos informativos sobre entrenamiento y fitness';
+COMMENT ON COLUMN guide_article.content_md IS 'Contenido en formato Markdown para renderizado enriquecido';
+
+-- =============================================================================
 -- Verificación final
 -- =============================================================================
 SELECT

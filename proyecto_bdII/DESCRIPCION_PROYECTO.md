@@ -1,5 +1,5 @@
 # GymOps — Descripción del Proyecto Final
-### Base de Datos II — Universidad Nacional de Ingeniería (FIEI)
+### Base de Datos II — Universidad Nacional Federico Villarreal (UNFV)
 **Autor:** Piero Rivera  
 **Gestor de BD:** PostgreSQL (Docker)  
 **Versión:** 1.0 — Fase inicial (sin módulo de Administración y Seguridad)
@@ -12,9 +12,9 @@
 
 El seguimiento del entrenamiento físico es una tarea que la mayoría de atletas aficionados y naturales realiza de manera informal: anotaciones en el celular, cuadernos o simplemente memoria. Este enfoque genera inconsistencias en el registro, pérdida de historial, imposibilidad de analizar tendencias de progreso y falta de motivación al no poder visualizar mejoras a lo largo del tiempo.
 
-**GymOps** nace como respuesta a esta problemática. Es un sistema de seguimiento de entrenamientos basado en terminal (CLI/TUI) que permite al usuario registrar sus sesiones de entrenamiento, controlar su historial de cargas, detectar récords personales (PR) y generar resúmenes semanales — todo desde la línea de comandos, sin depender de aplicaciones en la nube.
+**GymOps** nace como respuesta a esta problemática. Es un sistema de seguimiento de entrenamientos basado en terminal (CLI) que permite al usuario registrar sus sesiones de entrenamiento, controlar su historial de cargas, detectar récords personales (PR) y generar resúmenes semanales — todo desde la línea de comandos, sin depender de aplicaciones en la nube.
 
-Para el proyecto de Base de Datos II, GymOps evoluciona de una arquitectura SQLite local a una base de datos relacional robusta en **PostgreSQL**, incorporando todas las capacidades avanzadas de SQL requeridas por el curso.
+Para el proyecto de Base de Datos II, GymOps utiliza una base de datos relacional robusta en **PostgreSQL**, incorporando todas las capacidades avanzadas de SQL requeridas por el curso.
 
 ---
 
@@ -45,7 +45,7 @@ Implementar una base de datos relacional en PostgreSQL que soporte el sistema Gy
 
 **Fuera de alcance en esta versión:**
 - Módulo de Administración y Seguridad (gestión de usuarios/roles, backups automatizados)
-- Interfaz web o móvil (la aplicación es CLI/TUI)
+- Interfaz web o móvil (la aplicación es estrictamente CLI)
 - Sincronización en la nube
 
 ---
@@ -100,7 +100,7 @@ Implementar una base de datos relacional en PostgreSQL que soporte el sistema Gy
 | **PostgreSQL** | SGBD relacional open-source de clase enterprise. Soporta PL/pgSQL, triggers, CTE, funciones de ventana, índices parciales y todas las características requeridas por el curso. |
 | **Docker** | Permite levantar PostgreSQL de forma reproducible y aislada, sin instalación directa. Facilita el despliegue consistente del entorno. |
 | **Python + Typer + Rich** | Stack de la aplicación CLI. Se conecta a PostgreSQL vía `psycopg2`. Demuestra integración real entre app y BD. |
-| **Migración SQLite → PostgreSQL** | Demuestra escalabilidad del proyecto original y aprovecha características enterprise que SQLite no soporta (SPs, triggers complejos, roles, etc.). |
+| **PostgreSQL Nativo** | El diseño del sistema en PostgreSQL aprovecha características enterprise avanzadas (procedimientos almacenados, triggers complejos, vistas y funciones) para asegurar la integridad, consistencia y el rendimiento de la base de datos. |
 
 ---
 
@@ -132,7 +132,7 @@ Lenguaje App:         Python 3.12
 Conector BD:          psycopg2 (SQL directo, sin ORM)
 Gestor de paquetes:   uv
 CLI Framework:        Typer
-UI de terminal:       Rich / Textual
+UI de terminal:       Rich (salida formateada y colores)
 Control de versiones: Git + GitHub
 ```
 

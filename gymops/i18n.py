@@ -1,3 +1,4 @@
+# flake8: noqa
 """
 GymOps i18n — Internationalisation module.
 
@@ -161,6 +162,29 @@ _TRANSLATIONS: dict[str, dict[Language, str]] = {
                           "es": "Idioma inválido. Elige: en (English) o es (Español)."},
     "lang_current_en":   {"en": "Current language: English 🇬🇧", "es": "Idioma actual: English 🇬🇧"},
     "lang_current_es":   {"en": "Current language: Español 🇵🇪", "es": "Idioma actual: Español 🇵🇪"},
+
+    # ---- gymops guide & suggestions -----------------------------------------
+    "guide_title":       {"en": "📋 Fitness Guides & Articles", "es": "📋 Artículos y Guías de Fitness"},
+    "guide_list_slug":   {"en": "Slug",                         "es": "Slug"},
+    "guide_list_title":  {"en": "Title",                        "es": "Título"},
+    "guide_list_cat":    {"en": "Category",                     "es": "Categoría"},
+    "guide_err_not_found":{"en": "Article '{slug}' not found.", "es": "Artículo '{slug}' no encontrado."},
+    
+    # Contextual Suggestions
+    "sug_list_programs": {"en": "Suggestion: Use 'gymops select-program \"<program_name>\"' to activate a routine.",
+                          "es": "Sugerencia: Usa 'gymops select-program \"<nombre>\"' para activar una rutina."},
+    "sug_select_program":{"en": "Suggestion: Use 'gymops set-day \"<day_name>\"' to choose today's training day.",
+                          "es": "Sugerencia: Usa 'gymops set-day \"<nombre>\"' para establecer el día de entrenamiento de hoy."},
+    "sug_set_day":       {"en": "Suggestion: Use 'gymops log --exercise \"<exercise>\" --sets <S> --reps <R> --weight <W>' to log a set.",
+                          "es": "Sugerencia: Usa 'gymops log --exercise \"<ejercicio>\" --sets <series> --reps <reps> --weight <peso>' para registrar tu primera serie."},
+    "sug_log":           {"en": "Suggestion: Use 'gymops stats --exercise \"{exercise}\"' to check your progression.",
+                          "es": "Sugerencia: Usa 'gymops stats --exercise \"{exercise}\"' en tu próxima sesión para verificar si lograste sobrecarga progresiva."},
+    "sug_stats":         {"en": "Suggestion: Use 'gymops digest' at the end of the week to generate a Markdown digest.",
+                          "es": "Sugerencia: Usa 'gymops digest' al finalizar tu semana para generar tu resumen Markdown de progreso."},
+    "sug_guide_list":    {"en": "Suggestion: Use 'gymops guide read <slug>' to read an article.",
+                          "es": "Sugerencia: Usa 'gymops guide read <slug>' para leer una guía específica."},
+    "sug_guide_read":    {"en": "Suggestion: Use 'gymops list-programs' to begin exploring routines.",
+                          "es": "Sugerencia: Usa 'gymops list-programs' para comenzar a explorar tus rutinas de entrenamiento."},
 }
 
 

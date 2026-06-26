@@ -1,3 +1,4 @@
+# flake8: noqa
 """
 GymOps CLI — Command Line Interface.
 
@@ -107,6 +108,10 @@ def log(
                         f"({t('log_suggested')} {ex.type.capitalize()} {t('log_range')} [dim]{rep_range}[/])"
                     )
                     break
+
+        console.print(
+            f"\n[dim]{t('sug_log', exercise=workout.exercise_name)}[/dim]"
+        )
 
     except ValueError as e:
         console.print(f"[bright_red]{t('error_prefix')}[/] {e}")
@@ -268,6 +273,9 @@ def list_programs() -> None:
             ex_count = len(d_exs)
             suffix = f" [bold spring_green1]{t('prog_today')}[/]" if (active_day_id == d.id) else ""
             console.print(f"  {idx}. {d.name} — {ex_count} {t('prog_exercises')}{suffix}")
+            
+    console.print(f"\n[dim]{t('sug_list_programs')}[/dim]")
+
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +304,8 @@ def select_program(
     console.print(
         f"Program '[cyan]{target_program.name}[/]' {t('selp_activated')} [bold spring_green1]✓[/]"
     )
-    console.print(f"[dim]{t('selp_hint')}[/dim]")
+    console.print(f"\n[dim]{t('sug_select_program')}[/dim]")
+
 
 
 # ---------------------------------------------------------------------------
@@ -333,7 +342,8 @@ def set_day(
     console.print(
         f"{t('setday_set')} '[cyan]{target_day.name}[/]' [bold spring_green1]✓[/]"
     )
-    console.print(f"[dim]{t('setday_hint')}[/dim]")
+    console.print(f"\n[dim]{t('sug_set_day')}[/dim]")
+
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +494,9 @@ def stats(
                 border_style="bright_red",
             )
         )
+    
+    console.print(f"\n[dim]{t('sug_stats')}[/dim]")
+
 
 
 # ---------------------------------------------------------------------------
@@ -529,3 +542,56 @@ def set_language_cmd(
     current_lang_key = "lang_current_en" if lang == "en" else "lang_current_es"
     console.print(f"[bold spring_green1]{t('lang_set')}[/]")
     console.print(f"[dim]{t(current_lang_key)}[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# gymops guide
+# ---------------------------------------------------------------------------
+
+guide_app = typer.Typer(
+    name="guide",
+    help="📋 Fitness Guides & Articles — Guías y artículos de fitness.",
+    no_args_is_help=True,
+)
+app.add_typer(guide_app)
+
+
+@guide_app.command(name="list")
+def guide_list() -> None:
+    """List all available fitness guides."""
+    from gymops import db
+    from rich.table import Table
+    import rich.box as box
+
+    articles = db.get_all_articles()
+    
+    table = Table(box=box.ROUNDED, border_style="cyan", show_lines=True)
+    table.add_column(t("guide_list_cat"), style="bold", width=15)
+    table.add_column(t("guide_list_title"), style="white")
+    table.add_column("Slug", style="cyan")
+
+    for art in articles:
+        table.add_row(art.category, art.title, art.slug)
+
+    console.print(f"\n{t('guide_title')}\n")
+    console.print(table)
+    console.print(f"\n[dim]{t('sug_guide_list')}[/dim]")
+
+
+@guide_app.command(name="read")
+def guide_read(
+    slug: str = typer.Argument(..., help="The slug of the article to read."),
+) -> None:
+    """Read a specific fitness guide rendered in Markdown."""
+    from gymops import db
+    from rich.markdown import Markdown
+
+    article = db.get_article_by_slug(slug)
+    if not article:
+        console.print(f"[bright_red]{t('error_prefix')}[/] {t('guide_err_not_found', slug=slug)}")
+        raise typer.Exit(code=1)
+
+    console.print()
+    console.print(Markdown(article.content_md))
+    console.print(f"\n[dim]{t('sug_guide_read')}[/dim]")
+

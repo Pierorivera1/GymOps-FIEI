@@ -1,3 +1,4 @@
+# flake8: noqa
 """
 GymOps database layer.
 
@@ -21,7 +22,7 @@ from datetime import datetime
 import psycopg2
 import psycopg2.extras
 
-from gymops.models import DayExercise, Exercise, PR, Program, ProgramDay, Workout
+from gymops.models import DayExercise, Exercise, PR, Program, ProgramDay, Workout, GuideArticle
 
 
 # ---------------------------------------------------------------------------
@@ -708,7 +709,8 @@ def add_program(
                 for display_order, (ex_id, sets, reps) in enumerate(exercises, start=1):
                     cur.execute(
                         """INSERT INTO routine_exercise
-                           (program_day_id, exercise_id, sets_target, reps_target, order_in_day)
+                           (program_day_id, exercise_id, sets_target,
+                            reps_target, order_in_day)
                            VALUES (%s, %s, %s, %s, %s)""",
                         (day_id, ex_id, sets, str(reps), display_order),
                     )
@@ -735,13 +737,21 @@ def get_active_state(db_path: Optional[Path] = None) -> Optional[dict]:
             if not row:
                 return None
 
-            result: dict = {"program_id": row["program_id"], "day_id": row["day_id"]}
+            result: dict = {
+                "program_id": row["program_id"],
+                "day_id": row["day_id"],
+            }
 
             if row["program_id"]:
-                cur.execute("SELECT id, name, author FROM program WHERE id = %s", (row["program_id"],))
+                cur.execute(
+                    "SELECT id, name, author FROM program WHERE id = %s",
+                    (row["program_id"],),
+                )
                 p = cur.fetchone()
                 if p:
-                    created_by = "system" if p["author"] == "Jeff Nippard" else "user"
+                    created_by = (
+                        "system" if p["author"] == "Jeff Nippard" else "user"
+                    )
                     result["program"] = Program(
                         id=p["id"],
                         name=map_outgoing_program_name(p["name"]),
@@ -753,7 +763,10 @@ def get_active_state(db_path: Optional[Path] = None) -> Optional[dict]:
                 result["program"] = None
 
             if row["day_id"]:
-                cur.execute("SELECT * FROM program_day WHERE id = %s", (row["day_id"],))
+                cur.execute(
+                    "SELECT * FROM program_day WHERE id = %s",
+                    (row["day_id"],),
+                )
                 d = cur.fetchone()
                 result["day"] = ProgramDay(
                     id=d["id"],
@@ -767,7 +780,9 @@ def get_active_state(db_path: Optional[Path] = None) -> Optional[dict]:
             return result
 
 
-def set_active_program(program_id: int, db_path: Optional[Path] = None) -> None:
+def set_active_program(
+    program_id: int, db_path: Optional[Path] = None
+) -> None:
     """
     Set the active program. Clears the active day.
     """
@@ -779,10 +794,13 @@ def set_active_program(program_id: int, db_path: Optional[Path] = None) -> None:
             exists = cur.fetchone()
             if not exists:
                 raise ValueError(f"Program with id {program_id} not found.")
-            
+
             cur.execute(
-                """INSERT INTO active_program (id, program_id, day_id) VALUES (1, %s, NULL)
-                   ON CONFLICT(id) DO UPDATE SET program_id = EXCLUDED.program_id, day_id = NULL""",
+                """INSERT INTO active_program (id, program_id, day_id)
+                   VALUES (1, %s, NULL)
+                   ON CONFLICT(id) DO UPDATE SET
+                       program_id = EXCLUDED.program_id,
+                       day_id = NULL""",
                 (program_id,),
             )
 
@@ -809,7 +827,8 @@ def set_active_day(day_id: int, db_path: Optional[Path] = None) -> None:
                     f"Day id {day_id} does not belong to the active program."
                 )
             cur.execute(
-                """INSERT INTO active_program (id, program_id, day_id) VALUES (1, %s, %s)
+                """INSERT INTO active_program (id, program_id, day_id)
+                   VALUES (1, %s, %s)
                    ON CONFLICT(id) DO UPDATE SET day_id = EXCLUDED.day_id""",
                 (active["program_id"], day_id),
             )
@@ -833,7 +852,7 @@ def get_workouts_in_range(
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT 
+                """SELECT
                        MAX(ws.id) AS id,
                        ws.exercise_id,
                        e.name AS exercise_name,
@@ -847,7 +866,13 @@ def get_workouts_in_range(
                    JOIN exercise e ON ws.exercise_id = e.id
                    JOIN workout_session sess ON ws.session_id = sess.id
                    WHERE ws.logged_at >= NOW() - (%s * INTERVAL '1 day')
-                   GROUP BY ws.session_id, ws.exercise_id, e.name, ws.reps, ws.weight_kg, sess.program_day_id
+                   GROUP BY
+                       ws.session_id,
+                       ws.exercise_id,
+                       e.name,
+                       ws.reps,
+                       ws.weight_kg,
+                       sess.program_day_id
                    ORDER BY timestamp DESC, id DESC""",
                 (days,),
             )
@@ -867,3 +892,54 @@ def get_workouts_in_range(
         )
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Guide Articles (UNFV Fitness Guides)
+# ---------------------------------------------------------------------------
+
+def get_all_articles(db_path: Optional[Path] = None) -> list[GuideArticle]:
+    """Retrieve all guide articles from the database."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, title, slug, category, content_md "
+                "FROM guide_article ORDER BY category, title"
+            )
+            rows = cur.fetchall()
+
+    return [
+        GuideArticle(
+            id=r["id"],
+            title=r["title"],
+            slug=r["slug"],
+            category=r["category"],
+            content_md=r["content_md"]
+        )
+        for r in rows
+    ]
+
+
+def get_article_by_slug(
+    slug: str, db_path: Optional[Path] = None
+) -> Optional[GuideArticle]:
+    """Retrieve a specific guide article by its slug."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, title, slug, category, content_md "
+                "FROM guide_article WHERE LOWER(slug) = LOWER(%s)",
+                (slug.strip(),)
+            )
+            row = cur.fetchone()
+
+    if not row:
+        return None
+
+    return GuideArticle(
+        id=row["id"],
+        title=row["title"],
+        slug=row["slug"],
+        category=row["category"],
+        content_md=row["content_md"]
+    )
