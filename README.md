@@ -1,8 +1,6 @@
 # GymOps-FIEI 🏋️
 
-> Una herramienta de seguimiento de entrenamiento para la terminal y proyecto final de **Base de Datos II** en la **UNFV (Facultad de Ingeniería Electrónica e Informática - FIEI)**.
-
-Este repositorio [GymOps-FIEI](https://github.com/Pierorivera1/GymOps-FIEI) es una adaptación y fork informal del proyecto original GymOps. A diferencia de la versión original (enfocada en DevOps, infraestructura Azure y pipelines de CI/CD), **esta versión ha sido modificada y expandida específicamente para el ámbito de Bases de Datos**, migrando completamente a PostgreSQL y aplicando los conocimientos avanzados del curso de Base de Datos II. Por ende, características de DevOps como despliegues en Azure (`azure_deployment`), flujos de GitHub Actions (`github_actions`) y ejecución automatizada de tests no forman parte del flujo de este proyecto (las pruebas solo se ejecutan cuando se solicita explícitamente).
+> Herramienta de seguimiento de entrenamiento para la terminal
 
 ### ¿A quién va dirigido?
 GymOps está diseñado principalmente para:
