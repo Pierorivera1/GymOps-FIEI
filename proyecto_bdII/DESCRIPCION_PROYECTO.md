@@ -55,7 +55,7 @@ Implementar una base de datos relacional en PostgreSQL que soporte el sistema Gy
 | # | Proceso | Descripción |
 |---|---------|-------------|
 | P1 | Gestión de Catálogo | El usuario puede agregar, modificar y consultar ejercicios del catálogo por grupo muscular, tipo (compuesto/aislamiento) y equipamiento. |
-| P2 | Gestión de Programas | Creación y selección de programas de entrenamiento (splits) con sus días y ejercicios asignados. Pre-cargados: Jeff Nippard Upper/Lower, PPL, ULPPL. |
+| P2 | Gestión de Programas | Creación y selección de programas de entrenamiento (splits) con sus días y ejercicios asignados. Pre-cargados: Upper/Lower, PPL, ULPPL (splits recomendados por su efectividad). |
 | P3 | Registro de Sesión | Al iniciar entrenamiento se crea una sesión. El usuario registra series (sets), repeticiones y peso por ejercicio. |
 | P4 | Cálculo de 1RM | Por cada set registrado, el sistema calcula automáticamente el 1RM estimado usando la **fórmula de Epley**: `1RM = peso × (1 + reps/30)`. |
 | P5 | Control de PR | El sistema compara el 1RM estimado actual contra el histórico y actualiza el récord personal si corresponde. |
@@ -70,7 +70,7 @@ Implementar una base de datos relacional en PostgreSQL que soporte el sistema Gy
 |---------|-------------|
 | `muscle_group` | Grupos musculares (pecho, espalda, piernas, hombros, etc.) |
 | `exercise` | Catálogo maestro de ejercicios (nombre, músculo, tipo, equipamiento) |
-| `program` | Programa de entrenamiento (ej: "Upper/Lower 4-Day Jeff Nippard") |
+| `program` | Programa de entrenamiento (ej: "Upper/Lower 4-Day") |
 | `program_day` | Día dentro de un programa (ej: "Upper A — Strength") |
 | `routine_exercise` | Ejercicios asignados a un día de programa (con series y reps objetivo) |
 | `workout_session` | Sesión de entrenamiento realizada (fecha, usuario, programa y día) |
@@ -110,7 +110,7 @@ Implementar una base de datos relacional en PostgreSQL que soporte el sistema Gy
 CRUD sobre el catálogo maestro de ejercicios. Clasificación por grupo muscular, tipo de movimiento (compuesto/aislamiento) y equipamiento requerido.
 
 ### 2.2 Módulo de Programas
-Gestión de programas de entrenamiento y rutinas diarias. Incluye programas pre-cargados (Jeff Nippard splits) y permite creación de programas personalizados.
+Gestión de programas de entrenamiento y rutinas diarias. Incluye programas pre-cargados (splits conocidos y recomendados por su efectividad) y permite creación de programas personalizados.
 
 ### 2.3 Módulo de Sesiones
 Núcleo del sistema. Registro de entrenamientos en tiempo real: creación de sesión, log de sets y cierre de sesión.

@@ -58,7 +58,7 @@ CREATE TABLE program (
 );
 
 COMMENT ON TABLE  program                IS 'Programas de entrenamiento (splits)';
-COMMENT ON COLUMN program.author         IS 'Autor del programa (ej: Jeff Nippard)';
+COMMENT ON COLUMN program.author         IS 'Autor del programa (ej: system)';
 
 -- =============================================================================
 -- 4. PROGRAM_DAY — Días de cada programa

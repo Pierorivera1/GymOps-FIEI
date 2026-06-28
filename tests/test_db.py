@@ -5,7 +5,7 @@ from gymops import db as db_module
 
 
 def test_db_seeding(db_path):
-    """Test that default exercises and Jeff Nippard programs are seeded on init."""
+    """Test that default exercises and recommended programs are seeded."""
     exercises = db_module.get_all_exercises(db_path=db_path)
     assert len(exercises) > 40  # Seeding has 53 exercises
 

@@ -2,7 +2,7 @@
 
 Bienvenido a **GymOps**, tu gestor de entrenamientos personal en la terminal. Este proyecto final para el curso de **Base de Datos II (FIEI/UNI)** combina una aplicación CLI rápida y elegante desarrollada en Python con una potente base de datos relacional en **PostgreSQL 16**.
 
-GymOps está diseñado especialmente para **personas sin experiencia previa en el gimnasio**. Olvídate de planificar complejas rutinas o cargar pesadas aplicaciones llenas de publicidad: GymOps viene precargado con rutinas científicas diseñadas por expertos (como Jeff Nippard) para que solo tengas que llegar al gimnasio, seleccionar tu rutina y empezar a registrar. Asimismo, si eres un atleta intermedio o avanzado, el sistema te permite diseñar tus propios programas de entrenamiento personalizados.
+GymOps está diseñado especialmente para **personas sin experiencia previa en el gimnasio**. Olvídate de planificar complejas rutinas o cargar pesadas aplicaciones llenas de publicidad: GymOps viene precargado con rutinas científicas conocidas y recomendadas por su efectividad para que solo tengas que llegar al gimnasio, seleccionar tu rutina y empezar a registrar. Asimismo, si eres un atleta intermedio o avanzado, el sistema te permite diseñar tus propios programas de entrenamiento personalizados.
 
 ---
 
@@ -40,7 +40,7 @@ uv pip install -e .
 ```
 
 ### Paso 3: Inicializar la Base de Datos
-Ejecuta los scripts SQL principales en orden utilizando el cliente `psql`. Esto creará el esquema y poblará la base de datos con los datos iniciales (splits de Jeff Nippard y catálogo de ejercicios):
+Ejecuta los scripts SQL principales en orden utilizando el cliente `psql`. Esto creará el esquema y poblará la base de datos con los datos iniciales (splits conocidos y recomendados por su efectividad, y el catálogo de ejercicios):
 
 ```bash
 psql -h localhost -U gymops -d gymops_db -f proyecto_bdII/sql/01_ddl.sql
@@ -65,7 +65,7 @@ Visualiza los programas de entrenamiento disponibles para ver cuál se adapta me
 ```bash
 gymops list-programs
 ```
-Verás rutinas listas de Jeff Nippard, tales como:
+Verás rutinas listas y recomendadas por su efectividad, tales como:
 * `Upper/Lower 4-Day` (Torso/Pierna - 4 días a la semana)
 * `ULPPL 5-Day` (Torso/Pierna/Empuje/Tirón/Pierna - 5 días a la semana)
 * `PPL 6-Day` (Empuje/Tirón/Pierna - 6 días a la semana)

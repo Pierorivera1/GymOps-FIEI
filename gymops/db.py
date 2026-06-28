@@ -537,7 +537,7 @@ def get_all_programs(db_path: Optional[Path] = None) -> list[Program]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT id, name, CASE WHEN author = 'Jeff Nippard' THEN 'system' ELSE 'user' END AS created_by
+                """SELECT id, name, CASE WHEN author = 'system' THEN 'system' ELSE 'user' END AS created_by
                    FROM program
                    ORDER BY name"""
             )
@@ -690,7 +690,7 @@ def get_active_state(db_path: Optional[Path] = None) -> Optional[dict]:
                 p = cur.fetchone()
                 if p:
                     created_by = (
-                        "system" if p["author"] == "Jeff Nippard" else "user"
+                        "system" if p["author"] == "system" else "user"
                     )
                     result["program"] = Program(
                         id=p["id"],

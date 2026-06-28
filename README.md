@@ -8,7 +8,7 @@ GymOps está diseñado principalmente para:
 - **Principiantes y entusiastas del fitness** que desean comenzar a entrenar fuerza en el gimnasio o mediante otras modalidades. Ofrece la flexibilidad de registrar manualmente cualquier ejercicio (haciéndolo útil incluso para calistenia u otras disciplinas).
 
 ### Entrena con Ciencia
-El sistema recopila información y principios de entrenamiento basados en la ciencia (de divulgadores reconocidos como *Jeff Nippard*). GymOps viene con rutinas pre-agregadas científicamente estructuradas. El usuario puede:
+El sistema recopila información y principios de entrenamiento basados en la ciencia. GymOps viene precargado con splits conocidos y recomendados por su efectividad, científicamente estructurados. El usuario puede:
 1. Revisar las rutinas disponibles.
 2. Seleccionar la que mejor se adapte a su disponibilidad de tiempo y preferencias.
 3. Seguir de forma guiada los ejercicios, series y repeticiones recomendados para optimizar sus resultados.
@@ -21,7 +21,7 @@ Todo funciona desde la terminal: sin apps en la nube, sin cuentas, sin distracci
 
 | Perfil | Cómo lo ayuda GymOps |
 |--------|----------------------|
-| 🔰 **Sin experiencia** | Viene con rutinas listas de Jeff Nippard. Solo elige la tuya y empieza a registrar. |
+| 🔰 **Sin experiencia** | Viene precargado con splits conocidos y recomendados por su efectividad. Solo elige la tuya y empieza a registrar. |
 | 📈 **Intermedio** | Lleva el seguimiento de tus cargas, detecta si estás progresando y rompe tus PRs. |
 | ⚙️ **Avanzado** | Crea tus propios programas y rutinas personalizadas desde la CLI. |
 
@@ -29,7 +29,7 @@ Todo funciona desde la terminal: sin apps en la nube, sin cuentas, sin distracci
 
 ## Características
 
-- **Rutinas listas para usar**: Viene precargado con splits de Jeff Nippard (Upper/Lower 4 días, ULPPL 5 días, PPL 6 días). Ideal para quienes no saben qué rutina hacer.
+- **Rutinas listas para usar**: Viene precargado con splits conocidos y recomendados por su efectividad (Upper/Lower 4 días, ULPPL 5 días, PPL 6 días). Ideal para quienes no saben qué rutina hacer.
 - **Programas personalizados**: Crea tus propios programas y días de entrenamiento desde la CLI.
 - **Backend PostgreSQL**: Base de datos relacional completa con procedimientos almacenados, vistas, triggers e índices.
 - **1RM estimado**: Calcula el máximo estimado de una repetición usando la fórmula de Epley después de cada serie.
@@ -133,7 +133,7 @@ GymOps corre sobre **PostgreSQL 16** (Docker). El esquema incluye:
 | Script | Propósito |
 |--------|-----------|
 | `01_ddl.sql` | Esquema: tablas, PKs, FKs, CHECKs |
-| `02_seed.sql` | Datos iniciales: músculos, 51 ejercicios, 3 programas Jeff Nippard |
+| `02_seed.sql` | Datos iniciales: músculos, 51 ejercicios, 3 programas predeterminados |
 | `03_dml.sql` | DML: sesiones, series, ejemplos de UPDATE/DELETE |
 | `04_queries.sql` | 10 consultas avanzadas (CTE, funciones de ventana, RANK, LAG) |
 | `05_views.sql` | 9 vistas para reportes y seguridad |
@@ -148,7 +148,7 @@ GymOps corre sobre **PostgreSQL 16** (Docker). El esquema incluye:
 |---------|-------------|
 | `muscle_group` | Grupos musculares (pecho, espalda, piernas, hombros, etc.) |
 | `exercise` | Catálogo maestro de ejercicios (nombre, músculo, tipo, equipamiento) |
-| `program` | Programa de entrenamiento (ej: "Upper/Lower 4-Day Jeff Nippard") |
+| `program` | Programa de entrenamiento (ej: "Upper/Lower 4-Day") |
 | `program_day` | Día dentro de un programa (ej: "Upper A — Strength") |
 | `routine_exercise` | Ejercicios asignados a un día de programa (con series y reps objetivo) |
 | `workout_session` | Sesión de entrenamiento realizada (fecha, programa y día) |

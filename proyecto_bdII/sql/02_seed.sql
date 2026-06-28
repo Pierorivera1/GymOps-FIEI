@@ -102,12 +102,12 @@ INSERT INTO exercise (name, muscle_group_id, type, equipment, description) VALUE
     ('Seated Calf Raise',            9, 'isolation', 'machine',   'Elevación de talones sentado — sóleo');
 
 -- =============================================================================
--- 3. PROGRAMAS DE ENTRENAMIENTO (Jeff Nippard)
+-- 3. PROGRAMAS DE ENTRENAMIENTO (Predeterminados)
 -- =============================================================================
 
 -- Programa 1: Upper/Lower 4-Day
 INSERT INTO program (name, description, days_per_week, author) VALUES
-    ('Upper/Lower 4-Day', 'Split superior/inferior de 4 días por semana. Enfoque en fuerza e hipertrofia.', 4, 'Jeff Nippard');
+    ('Upper/Lower 4-Day', 'Split superior/inferior de 4 días por semana. Enfoque en fuerza e hipertrofia.', 4, 'system');
 
 -- Días del Upper/Lower 4-Day
 INSERT INTO program_day (program_id, name, day_order, focus) VALUES
@@ -155,7 +155,7 @@ INSERT INTO routine_exercise (program_day_id, exercise_id, sets_target, reps_tar
 
 -- Programa 2: PPL 6-Day
 INSERT INTO program (name, description, days_per_week, author) VALUES
-    ('PPL 6-Day', 'Push/Pull/Legs 6 días por semana. Alta frecuencia y volumen para hipertrofia avanzada.', 6, 'Jeff Nippard');
+    ('PPL 6-Day', 'Push/Pull/Legs 6 días por semana. Alta frecuencia y volumen para hipertrofia avanzada.', 6, 'system');
 
 -- Días del PPL 6-Day
 INSERT INTO program_day (program_id, name, day_order, focus) VALUES
@@ -168,7 +168,7 @@ INSERT INTO program_day (program_id, name, day_order, focus) VALUES
 
 -- Programa 3: ULPPL 5-Day
 INSERT INTO program (name, description, days_per_week, author) VALUES
-    ('ULPPL 5-Day', 'Hybrid Upper/Lower + Push/Pull/Legs. 5 días por semana, balance entre fuerza e hipertrofia.', 5, 'Jeff Nippard');
+    ('ULPPL 5-Day', 'Hybrid Upper/Lower + Push/Pull/Legs. 5 días por semana, balance entre fuerza e hipertrofia.', 5, 'system');
 
 -- Días del ULPPL 5-Day
 INSERT INTO program_day (program_id, name, day_order, focus) VALUES
@@ -223,7 +223,7 @@ La consistencia es el factor más importante para ganar masa muscular y fuerza. 
 - **Ventaja:** Mayor volumen de entrenamiento semanal. Sin embargo, requiere una excelente gestión del sueño y la nutrición para no sobreentrenarse.
 
 ## 🏋️ Integración en GymOps
-GymOps viene con los 3 splits de Jeff Nippard precargados. Puedes explorarlos y activar el tuyo usando:
+GymOps viene precargado con splits conocidos y recomendados por su efectividad. Puedes explorarlos y activar el tuyo usando:
 - `gymops list-programs` para ver los programas y cuántos días requiere cada uno.
 - `gymops select-program "PPL 6-Day"` (o el nombre que elijas) para activarlo.
 - `gymops set-day` para indicarle a la app en qué sesión estás hoy.'),
@@ -231,7 +231,7 @@ GymOps viene con los 3 splits de Jeff Nippard precargados. Puedes explorarlos y 
     ('¿Cuánto tiempo debo descansar entre series?', 'tiempo-descanso', 'Entrenamiento',
 '# ¿Cuánto tiempo debo descansar entre series?
 
-El tiempo de descanso entre series es una variable de entrenamiento frecuentemente subestimada. Muchos creen que descansar poco (menos de 1 minuto) es mejor para quemar grasa o sentir "bombeo", pero la ciencia de autores como Jeff Nippard y Sean Nalewanyj demuestra lo contrario.
+El tiempo de descanso entre series es una variable de entrenamiento frecuentemente subestimada. Muchos creen que descansar poco (menos de 1 minuto) es mejor para quemar grasa o sentir "bombeo", pero la ciencia demuestra lo contrario.
 
 ## Tiempos de Descanso Recomendados
 

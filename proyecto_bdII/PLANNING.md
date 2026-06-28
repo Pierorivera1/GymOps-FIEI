@@ -57,7 +57,7 @@ proyecto_bdII/
 │   └── diagrama_actividades.png
 ├── sql/
 │   ├── 01_ddl.sql              ← CREATE DATABASE, tablas, constraints
-│   ├── 02_seed.sql             ← Datos iniciales (splits Jeff Nippard, ejercicios)
+│   ├── 02_seed.sql             ← Datos iniciales (splits recomendados por su efectividad, ejercicios)
 │   ├── 03_dml.sql              ← INSERT/UPDATE/DELETE de ejemplo + validaciones
 │   ├── 04_queries.sql          ← Consultas avanzadas (JOINs, CTEs, CASE, HAVING)
 │   ├── 05_views.sql            ← Vistas de reporte y seguridad
@@ -157,7 +157,7 @@ audit_log (id, table_name, operation, old_data, new_data, changed_at)
 **Datos seed:**
 - 10+ grupos musculares
 - 50+ ejercicios del catálogo base
-- 3 programas Jeff Nippard (Upper/Lower 4-Day, ULPPL 5-Day, PPL 6-Day) con todos sus días y ejercicios
+- 3 programas recomendados (Upper/Lower 4-Day, ULPPL 5-Day, PPL 6-Day) con todos sus días y ejercicios
 
 ### Fase 2 — DML y Consultas (sql/03 y 04)
 **Objetivo:** Demostrar operaciones de manipulación y consultas avanzadas.
