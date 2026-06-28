@@ -42,66 +42,13 @@ def get_db_path() -> Path:
 
 
 # ---------------------------------------------------------------------------
-# PostgreSQL Connection Wrapper to support direct .execute() calls
-# ---------------------------------------------------------------------------
-
-class PostgreSQLConnectionWrapper:
-    def __init__(self, conn: Any) -> None:
-        self._conn = conn
-
-    def cursor(self, *args: Any, **kwargs: Any) -> Any:
-        return self._conn.cursor(*args, **kwargs)
-
-    def commit(self) -> None:
-        self._conn.commit()
-
-    def rollback(self) -> None:
-        self._conn.rollback()
-
-    def close(self) -> None:
-        self._conn.close()
-
-    def execute(self, sql: str, params: Any = None) -> Any:
-        # Convert SQLite style ? placeholders to %s
-        if params:
-            sql = sql.replace("?", "%s")
-        # Replace SQLite table names with PostgreSQL ones
-        sql = sql.replace("programs", "program").replace("exercises", "exercise")
-        
-        cur = self._conn.cursor()
-        cur.execute(sql, params)
-        return cur
-
-    def executemany(self, sql: str, params_list: Any) -> Any:
-        sql = sql.replace("?", "%s")
-        sql = sql.replace("programs", "program").replace("exercises", "exercise")
-        cur = self._conn.cursor()
-        cur.executemany(sql, params_list)
-        return cur
-
-    def executescript(self, sql_script: str) -> Any:
-        cur = self._conn.cursor()
-        cur.execute(sql_script)
-        return cur
-
-    def __enter__(self) -> "PostgreSQLConnectionWrapper":
-        return self
-
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        if exc_type:
-            self._conn.rollback()
-        else:
-            self._conn.commit()
-
-
-# ---------------------------------------------------------------------------
 # Connection context manager (PostgreSQL implementation)
 # ---------------------------------------------------------------------------
 
 @contextmanager
 def get_connection(db_path: Optional[Path] = None) -> Generator[Any, None, None]:
     """
-    Yield an open PostgreSQL connection wrapped in PostgreSQLConnectionWrapper.
+    Yield an open PostgreSQL connection.
     """
     host = os.environ.get("GYMOPS_DB_HOST", "localhost")
     port = os.environ.get("GYMOPS_DB_PORT", "5432")
@@ -121,15 +68,14 @@ def get_connection(db_path: Optional[Path] = None) -> Generator[Any, None, None]
         dbname=dbname,
         cursor_factory=psycopg2.extras.RealDictCursor
     )
-    wrapper = PostgreSQLConnectionWrapper(conn)
     try:
-        yield wrapper
-        wrapper.commit()
+        yield conn
+        conn.commit()
     except Exception:
-        wrapper.rollback()
+        conn.rollback()
         raise
     finally:
-        wrapper.close()
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -516,23 +462,19 @@ def get_history(
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT 
-                       MAX(ws.id) AS id,
-                       ws.exercise_id,
-                       e.name AS exercise_name,
-                       COUNT(ws.id) AS sets,
-                       ws.reps,
-                       ws.weight_kg AS weight,
-                       MAX(ws.estimated_1rm) AS epley_1rm,
-                       MAX(ws.logged_at) AS timestamp,
-                       sess.program_day_id AS day_id
-                   FROM workout_set ws
-                   JOIN exercise e ON ws.exercise_id = e.id
-                   JOIN workout_session sess ON ws.session_id = sess.id
-                   WHERE ws.exercise_id = %s
-                   GROUP BY ws.session_id, ws.exercise_id, e.name, ws.reps, ws.weight_kg, sess.program_day_id
-                   ORDER BY timestamp DESC, id DESC
-                   LIMIT %s""",
-                (postgres_exercise_id, limit),
+                       MAX(h.set_rank)::int AS id,
+                       %s AS exercise_id,
+                       %s AS exercise_name,
+                       COUNT(*)::int AS sets,
+                       h.reps,
+                       h.weight_kg AS weight,
+                       MAX(h.estimated_1rm) AS epley_1rm,
+                       MAX(h.session_date) AS timestamp,
+                       (SELECT program_day_id FROM workout_session WHERE id = h.session_id) AS day_id
+                   FROM fn_exercise_history(%s, %s) h
+                   GROUP BY h.session_id, h.reps, h.weight_kg
+                   ORDER BY timestamp DESC, id DESC""",
+                (postgres_exercise_id, postgres_exercise.name, postgres_exercise_id, limit),
             )
             rows = cur.fetchall()
 
@@ -562,16 +504,14 @@ def get_all_prs(db_path: Optional[Path] = None) -> list[PR]:
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT 
-                       pr.id,
-                       pr.exercise_id,
-                       e.name AS exercise_name,
-                       set.weight_kg AS max_weight,
-                       pr.max_1rm AS max_epley_1rm,
-                       pr.achieved_at AS timestamp
-                   FROM personal_record pr
-                   JOIN exercise e ON pr.exercise_id = e.id
-                   LEFT JOIN workout_set set ON pr.set_id = set.id
-                   ORDER BY e.name""",
+                       pr_id AS id,
+                       exercise_id,
+                       ejercicio AS exercise_name,
+                       peso_en_pr_kg AS max_weight,
+                       "1rm_max_kg" AS max_epley_1rm,
+                       fecha_pr AS timestamp
+                   FROM v_current_prs
+                   ORDER BY ejercicio""",
             )
             rows = cur.fetchall()
 
@@ -892,6 +832,27 @@ def get_workouts_in_range(
         )
         for r in rows
     ]
+
+
+def get_weekly_digest_stats(days: int = 7) -> list[dict]:
+    """
+    Get weekly workout summary stats from the v_workout_history database view.
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT 
+                       ejercicio AS exercise_name,
+                       COUNT(*)::int AS sets_logged,
+                       MAX(peso_kg)::float AS best_weight,
+                       MAX("1rm_estimado_kg")::float AS best_1rm
+                   FROM v_workout_history
+                   WHERE fecha >= CURRENT_DATE - (%s * INTERVAL '1 day')
+                   GROUP BY ejercicio
+                   ORDER BY ejercicio""",
+                (days,)
+            )
+            return [dict(r) for r in cur.fetchall()]
 
 
 # ---------------------------------------------------------------------------

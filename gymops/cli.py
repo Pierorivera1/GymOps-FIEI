@@ -170,9 +170,11 @@ def add_program() -> None:
     # Program name
     name = typer.prompt("Enter program name")
     with db.get_connection() as conn:
-        exists = conn.execute(
-            "SELECT id FROM programs WHERE LOWER(name) = LOWER(?)", (name,)
-        ).fetchone()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM program WHERE LOWER(name) = LOWER(%s)", (name,)
+            )
+            exists = cur.fetchone()
     if exists:
         console.print(f"[bright_red]Error:[/] Program '{name}' already exists.")
         raise typer.Exit(code=1)

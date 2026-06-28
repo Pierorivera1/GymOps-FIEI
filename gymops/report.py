@@ -8,14 +8,14 @@ This file is published as a GitHub Actions artifact named 'ci-workout-digest'.
 from datetime import date, timedelta
 from pathlib import Path
 
-from gymops.db import get_all_prs, get_workouts_in_range
+from gymops.db import get_all_prs, get_weekly_digest_stats
 
 
 def generate_digest(days: int = 7, output_dir: Path = Path(".")) -> str:
     """
-    Generate a Markdown digest of recent workout activity.
+    Generate a Markdown digest of recent workout activity using database views.
 
-    Scans the last N days of workout history, counts total sets logged,
+    Scans the last N days of workout history using database views, counts total sets logged,
     lists new/updated PRs during the period, and writes a Markdown file.
 
     Args:
@@ -30,13 +30,11 @@ def generate_digest(days: int = 7, output_dir: Path = Path(".")) -> str:
     filename = f"digest_{today.isoformat()}.md"
     output_path = output_dir / filename
 
-    workouts = get_workouts_in_range(days=days)
+    stats = get_weekly_digest_stats(days=days)
     all_prs = get_all_prs()
 
-    # Group workouts by exercise
-    by_exercise: dict[str, list] = {}
-    for w in workouts:
-        by_exercise.setdefault(w.exercise_name, []).append(w)
+    total_sets = sum(item["sets_logged"] for item in stats)
+    exercises_count = len(stats)
 
     # Build the Markdown content
     lines: list[str] = [
@@ -46,8 +44,8 @@ def generate_digest(days: int = 7, output_dir: Path = Path(".")) -> str:
             f"**Period:** {since.isoformat()} → "
             f"{today.isoformat()} ({days} days)  "
         ),
-        f"**Total Sets Logged:** {len(workouts)}  ",
-        f"**Exercises Trained:** {len(by_exercise)}  ",
+        f"**Total Sets Logged:** {total_sets}  ",
+        f"**Exercises Trained:** {exercises_count}  ",
         "",
         "---",
         "",
@@ -57,11 +55,9 @@ def generate_digest(days: int = 7, output_dir: Path = Path(".")) -> str:
         "|:---------|------------:|-----------------:|-------------------:|",
     ]
 
-    for ex_name, logs in sorted(by_exercise.items()):
-        best_weight = max(w.weight for w in logs)
-        best_1rm = max(w.epley_1rm for w in logs)
+    for item in stats:
         lines.append(
-            f"| {ex_name} | {len(logs)} | {best_weight:.1f} | {best_1rm:.1f} |"
+            f"| {item['exercise_name']} | {item['sets_logged']} | {item['best_weight']:.1f} | {item['best_1rm']:.1f} |"
         )
 
     lines += [

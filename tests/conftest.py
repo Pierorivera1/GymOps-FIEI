@@ -16,6 +16,9 @@ def test_db_env(tmp_path, monkeypatch):
     Automatically set GYMOPS_DB_PATH to a temporary database file for each test,
     ensuring that no test (including CLI runner tests) writes to the real database.
     """
+    # Force test suite to run in English
+    monkeypatch.setattr("gymops.i18n.get_language", lambda: "en")
+    
     db_path = tmp_path / "test_gymops.db"
     monkeypatch.setenv("GYMOPS_DB_PATH", str(db_path))
     init_db(db_path=db_path)
